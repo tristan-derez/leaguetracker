@@ -23,48 +23,40 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 
 func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
     options := i.ApplicationCommandData().Options
-	if len(options) == 0 {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Please provide a summoner name.",
-			},
-		})
-		return
-	}
+    if len(options) == 0 {
+        respondWithError(s, i, "Please provide a summoner name.")
+        return
+    }
 
-	summonerName := strings.ToLower(options[0].StringValue())
+    summonerName := strings.ToLower(options[0].StringValue())
+	// todo: check on RIOT api if user exists
+    guildID := i.GuildID
 
-	// todo: valide summoner's name with Riot API.
-	if err := b.storage.AddSummoner(summonerName); err != nil {
+    if err := b.storage.AddSummoner(guildID, summonerName); err != nil {
         log.Printf("Error adding summoner: %v", err)
         respondWithError(s, i, "An error occurred while adding the summoner. Please try again later.")
         return
     }
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("Now following summoner: %s", summonerName),
-		},
-	})
+    s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+        Type: discordgo.InteractionResponseChannelMessageWithSource,
+        Data: &discordgo.InteractionResponseData{
+            Content: fmt.Sprintf("Summoner '%s' is now being tracked in this server.", summonerName),
+        },
+    })
 }
 
 func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	options := i.ApplicationCommandData().Options
+    options := i.ApplicationCommandData().Options
     if len(options) == 0 {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Please provide a summoner name.",
-			},
-		})
-		return
-	}
+        respondWithError(s, i, "Please provide a summoner name.")
+        return
+    }
 
-	summonerName := strings.ToLower(options[0].StringValue())
-    
-	if err := b.storage.RemoveSummoner(summonerName); err != nil {
+    summonerName := strings.ToLower(options[0].StringValue())
+    guildID := i.GuildID
+
+    if err := b.storage.RemoveSummoner(guildID, summonerName); err != nil {
         log.Printf("Error removing summoner: %v", err)
         respondWithError(s, i, "An error occurred while removing the summoner. Please try again later.")
         return
@@ -73,27 +65,40 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
     s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
         Type: discordgo.InteractionResponseChannelMessageWithSource,
         Data: &discordgo.InteractionResponseData{
-            Content: fmt.Sprintf("Removed summoner: %s", summonerName),
+            Content: fmt.Sprintf("Summoner '%s' has been removed from tracking in this server.", summonerName),
         },
     })
 }
 
 func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	summoners, err := b.storage.ListSummoners()
+    guildID := i.GuildID
+
+    summoners, err := b.storage.ListSummoners(guildID)
     if err != nil {
         log.Printf("Error listing summoners: %v", err)
         respondWithError(s, i, "An error occurred while retrieving the list of summoners. Please try again later.")
         return
     }
 
-	var content string
-	if len(summoners) == 0 {
-		content = "No summoners are currently being followed"
-	} else {
-		content = "Followed summoners:\n" + strings.Join(summoners, "\n")
-	}
+    var content string
+    if len(summoners) == 0 {
+        content = "No summoners are currently being tracked in this server."
+    } else {
+        content = "Tracked summoners in this server:\n"
+        for _, s := range summoners {
+            rank := "Unknown"
+            if s.Rank != nil {
+                rank = *s.Rank
+            }
+            leaguePoints := 0
+            if s.LeaguePoints != nil {
+                leaguePoints = *s.LeaguePoints
+            }
+            content += fmt.Sprintf("- %s (Rank: %s, LP: %d)\n", s.Name, rank, leaguePoints)
+        }
+    }
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+    s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
         Type: discordgo.InteractionResponseChannelMessageWithSource,
         Data: &discordgo.InteractionResponseData{
             Content: content,

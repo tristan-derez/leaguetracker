@@ -42,13 +42,24 @@ func (b *Bot) Run() error {
         if err := b.registerCommands(); err != nil {
             log.Printf("Failed to register commands: %v", err)
         }
+
+		for _, guild := range r.Guilds {
+            err := b.storage.AddGuild(guild.ID, guild.Name)
+            if err != nil {
+                log.Printf("Error adding guild to database: %v", err)
+            }
+        }
     })
+
+	b.session.AddHandler(b.handleGuildCreate)
 
     err := b.session.Open()
     if err != nil {
         return err
     }
     defer b.session.Close()
+
+	
 
     log.Println("Bot is now running. Press CTRL-C to exit.")
     sc := make(chan os.Signal, 1)
@@ -116,6 +127,15 @@ func (b *Bot) registerCommands() error {
 	}
 
 	return nil
+}
+
+func (b *Bot) handleGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
+    err := b.storage.AddGuild(g.ID, g.Name)
+    if err != nil {
+        log.Printf("Error adding new guild to database: %v", err)
+    } else {
+        log.Printf("Added new guild to database: %s (%s)", g.Name, g.ID)
+    }
 }
 
 func (b *Bot) Close() error {
