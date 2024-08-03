@@ -60,6 +60,7 @@ func (s *Storage) AddSummoner(name string) error {
 }
 
 func (s *Storage) RemoveSummoner(name string) error {
+    // todo: check if summoner is in db
     _, err := s.db.Exec("DELETE FROM summoners WHERE name = $1", name)
     return err
 }
