@@ -9,6 +9,8 @@ import (
 
 type Config struct {
     DiscordToken  string
+    RiotAPIKey    string
+    RiotAPIRegion string
     DBHost        string
     DBPort        string
     DBUsername    string
@@ -24,6 +26,8 @@ func Load() (*Config, error) {
 
     config := &Config{
         DiscordToken: os.Getenv("DISCORD_TOKEN"),
+        RiotAPIKey: os.Getenv("RIOT_API"),
+        RiotAPIRegion: os.Getenv("RIOT_REGION"),
         DBHost:       os.Getenv("DB_HOST"),
         DBPort:       os.Getenv("DB_PORT"),
         DBUsername:       os.Getenv("DB_USERNAME"),
@@ -42,6 +46,8 @@ func Load() (*Config, error) {
 func (c *Config) validate() error {
     requiredVars := map[string]*string{
         "DISCORD_TOKEN": &c.DiscordToken,
+        "RIOT_API":      &c.RiotAPIKey,
+        "RIOT_REGION":   &c.RiotAPIRegion,
         "DB_HOST":       &c.DBHost,
         "DB_PORT":       &c.DBPort,
         "DB_USERNAME":   &c.DBUsername,
