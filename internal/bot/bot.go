@@ -9,12 +9,14 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/tristan-derez/league-tracker/internal/config"
+	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
 	"github.com/tristan-derez/league-tracker/internal/storage"
 )
 
 type Bot struct {
 	session *discordgo.Session
 	storage *storage.Storage
+	riotClient *riotapi.Client
 }
 
 func New(cfg *config.Config) (*Bot, error) {
@@ -28,9 +30,12 @@ func New(cfg *config.Config) (*Bot, error) {
         return nil, err
     }
 
+	riotClient := riotapi.NewClient(cfg.RiotAPIKey, cfg.RiotAPIRegion)
+
 	bot := &Bot{
 		session: session,
 		storage: storage,
+		riotClient: riotClient,
 	}
 
 	return bot, nil
