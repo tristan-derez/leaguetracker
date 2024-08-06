@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/tristan-derez/league-tracker/internal/utils"
 )
 
 func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -126,9 +127,15 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
     if len(summoners) == 0 {
         content = "No summoners are currently being tracked in this server."
     } else {
-        content = "Tracked summoners in this server:\n"
         for _, summoner := range summoners {
-            content += fmt.Sprintf("- %s (Rank: %s, LP: %d)\n", summoner.Name, summoner.Rank, summoner.LeaguePoints)
+            if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
+                content += fmt.Sprintf("- %s (Unranked)\n", summoner.Name)
+            } else {
+                words := strings.Fields(summoner.Rank)
+                words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
+                formattedRank := strings.Join(words, " ")
+                content += fmt.Sprintf("- %s (%s, %dLP)\n", summoner.Name, formattedRank, summoner.LeaguePoints)
+            }
         }
     }
 

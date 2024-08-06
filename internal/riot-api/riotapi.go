@@ -97,7 +97,11 @@ func (c *Client) GetSummonerRank(summonerID string) (*LeagueEntry, error) {
     }
 
     if len(leagueEntries) == 0 {
-        return nil, fmt.Errorf("no ranked entries found for summoner ID %s", summonerID)
+        return &LeagueEntry{
+            QueueType: "RANKED_SOLO_5x5",
+            Tier:      "UNRANKED",
+            Rank:      "",
+        }, nil
     }
 
     for _, entry := range leagueEntries {

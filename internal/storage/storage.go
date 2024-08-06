@@ -243,14 +243,27 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData) 
 
 func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
     rows, err := s.db.Query(`
-        SELECT s.riot_summoner_id, s.riot_account_id, s.riot_summoner_puuid, 
-               s.profile_icon_id, s.revision_date, s.summoner_level, s.name,
-               COALESCE(le.tier || ' ' || le.rank, 'Unranked') as rank, 
-               COALESCE(le.league_points, 0) as league_points
-        FROM summoners s
-        LEFT JOIN league_entries le ON s.id = le.summoner_id AND le.queue_type = 'RANKED_SOLO_5x5'
-        JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
-        WHERE gsa.guild_id = $1
+        SELECT 
+            s.riot_summoner_id, 
+            s.riot_account_id, 
+            s.riot_summoner_puuid, 
+            s.profile_icon_id, 
+            s.revision_date, 
+            s.summoner_level, 
+            s.name,
+            CASE
+                WHEN le.tier = 'UNRANKED' OR le.tier IS NULL THEN 'UNRANKED'
+                ELSE le.tier || ' ' || le.rank
+            END as rank,
+            COALESCE(le.league_points, 0) as league_points
+        FROM 
+            summoners s
+        LEFT JOIN 
+            league_entries le ON s.id = le.summoner_id AND le.queue_type = 'RANKED_SOLO_5x5'
+        JOIN 
+            guild_summoner_associations gsa ON s.id = gsa.summoner_id
+        WHERE 
+            gsa.guild_id = $1
     `, guildID)
     if err != nil {
         return nil, err
