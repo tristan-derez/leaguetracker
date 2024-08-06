@@ -14,8 +14,8 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
         b.handleAdd(s, i)
     case "remove":
         b.handleRemove(s, i)
-    // case "list":
-    //     b.handleList(s, i)
+    case "list":
+        b.handleList(s, i)
 	case "ping": 
 		b.handlePing(s, i)
 	}
@@ -63,10 +63,21 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
         return
     }
 
+    lastMatchData, err := b.riotClient.GetLastMatchData(account.SummonerPUUID)
+    if err != nil {
+        log.Printf("Error fetching last match data: %v", err)
+    }
+
     if err := b.storage.AddSummoner(guildID, summonerName, *summoner, rankInfo); err != nil {
-        log.Printf("Error adding summoner to database: %v", err) // Add this line
-        respondWithError(s, i, fmt.Sprintf("Error adding summoner to database: %v", err)) // Modify this line
+        log.Printf("Error adding summoner to database: %v", err)
+        respondWithError(s, i, fmt.Sprintf("Error adding summoner to database: %v", err))
         return
+    }
+
+    if lastMatchData != nil {
+        if err := b.storage.AddMatch(summoner.RiotSummonerID, lastMatchData); err != nil {
+            log.Printf("Error adding match to database: %v", err)
+        }
     }
 
     s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -101,41 +112,33 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
     })
 }
 
-// func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
-//     guildID := i.GuildID
+func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+    guildID := i.GuildID
 
-//     summoners, err := b.storage.ListSummoners(guildID)
-//     if err != nil {
-//         log.Printf("Error listing summoners: %v", err)
-//         respondWithError(s, i, "An error occurred while retrieving the list of summoners. Please try again later.")
-//         return
-//     }
+    summoners, err := b.storage.ListSummoners(guildID)
+    if err != nil {
+        log.Printf("Error listing summoners: %v", err)
+        respondWithError(s, i, "An error occurred while retrieving the list of summoners. Please try again later.")
+        return
+    }
 
-//     var content string
-//     if len(summoners) == 0 {
-//         content = "No summoners are currently being tracked in this server."
-//     } else {
-//         content = "Tracked summoners in this server:\n"
-//         for _, s := range summoners {
-//             rank := "Unknown"
-//             if s.Rank != nil {
-//                 rank = *s.Rank
-//             }
-//             leaguePoints := 0
-//             if s.LeaguePoints != nil {
-//                 leaguePoints = *s.LeaguePoints
-//             }
-//             content += fmt.Sprintf("- %s (Rank: %s, LP: %d)\n", s.Name, rank, leaguePoints)
-//         }
-//     }
+    var content string
+    if len(summoners) == 0 {
+        content = "No summoners are currently being tracked in this server."
+    } else {
+        content = "Tracked summoners in this server:\n"
+        for _, summoner := range summoners {
+            content += fmt.Sprintf("- %s (Rank: %s, LP: %d)\n", summoner.Name, summoner.Rank, summoner.LeaguePoints)
+        }
+    }
 
-//     s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-//         Type: discordgo.InteractionResponseChannelMessageWithSource,
-//         Data: &discordgo.InteractionResponseData{
-//             Content: content,
-//         },
-//     })
-// }
+    s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+        Type: discordgo.InteractionResponseChannelMessageWithSource,
+        Data: &discordgo.InteractionResponseData{
+            Content: content,
+        },
+    })
+}
 
 func (b *Bot) handlePing(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

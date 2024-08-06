@@ -52,7 +52,7 @@ func (s *Storage) initDB() error {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )`,
-        `CREATE TABLE league_entries (
+        `CREATE TABLE IF NOT EXISTS league_entries (
             id SERIAL PRIMARY KEY,
             summoner_id INTEGER REFERENCES summoners(id),
             queue_type TEXT NOT NULL,
@@ -68,6 +68,32 @@ func (s *Storage) initDB() error {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(summoner_id, queue_type)
+        )`,
+        `CREATE TABLE IF NOT EXISTS matches (
+            id SERIAL PRIMARY KEY,
+            summoner_id INTEGER REFERENCES summoners(id),
+            match_id TEXT NOT NULL,
+            champion_name TEXT NOT NULL,
+            game_creation BIGINT NOT NULL,
+            game_duration INTEGER NOT NULL,
+            game_end_timestamp BIGINT NOT NULL,
+            game_id BIGINT NOT NULL,
+            game_mode TEXT NOT NULL,
+            game_type TEXT NOT NULL,
+            kills INTEGER NOT NULL,
+            deaths INTEGER NOT NULL,
+            result TEXT NOT NULL,
+            pentakills INTEGER NOT NULL,
+            team_position TEXT NOT NULL,
+            total_damage_dealt_to_champions INTEGER NOT NULL,
+            total_minions_killed INTEGER NOT NULL,
+            neutral_minions_killed INTEGER NOT NULL,
+            wards_killed INTEGER NOT NULL,
+            wards_placed INTEGER NOT NULL,
+            win BOOLEAN NOT NULL,
+            total_minions_and_neutral_minions_killed INTEGER NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(summoner_id, match_id)
         )`,
         `CREATE TABLE IF NOT EXISTS guild_summoner_associations (
             guild_id TEXT REFERENCES guilds(guild_id),
@@ -109,9 +135,7 @@ func (s *Storage) AddSummoner(guildID, summonerName string, summoner riotapi.Sum
         return fmt.Errorf("error beginning transaction: %w", err)
     }
     defer tx.Rollback()
-
-    log.Printf("RevisionDate value: %v, Type: %T", summoner.RevisionDate, summoner.RevisionDate)
-
+    
     var summonerID int
     err = tx.QueryRow(`
     INSERT INTO summoners (
@@ -182,33 +206,72 @@ func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
     return err
 }
 
-// func (s *Storage) ListSummoners(guildID string) ([]Summoner, error) {
-//     rows, err := s.db.Query(`
-//         SELECT s.id, s.name, COALESCE(s.rank, ''), COALESCE(s.league_points, 0), s.updated_at
-//         FROM summoners s
-//         JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
-//         WHERE gsa.guild_id = $1
-//     `, guildID)
-//     if err != nil {
-//         return nil, err
-//     }
-//     defer rows.Close()
+func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData) error {
+    var summonerID int
+    err := s.db.QueryRow("SELECT id FROM summoners WHERE riot_summoner_id = $1", riotSummonerID).Scan(&summonerID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return fmt.Errorf("summoner with Riot ID %s not found", riotSummonerID)
+        }
+        return fmt.Errorf("error fetching summoner ID: %w", err)
+    }
 
-//     var summoners []Summoner
-//     for rows.Next() {
-//         var s Summoner
-//         var rank string
-//         var leaguePoints int
-//         if err := rows.Scan(&s.ID, &s.Name, &rank, &leaguePoints, &s.UpdatedAt); err != nil {
-//             return nil, err
-//         }
-//         s.Rank = &rank
-//         s.LeaguePoints = &leaguePoints
-//         summoners = append(summoners, s)
-//     }
+    _, err = s.db.Exec(`
+        INSERT INTO matches (
+            summoner_id, match_id, champion_name, game_creation, game_duration,
+            game_end_timestamp, game_id, game_mode, game_type, kills, deaths,
+            result, pentakills, team_position, total_damage_dealt_to_champions,
+            total_minions_killed, neutral_minions_killed, wards_killed,
+            wards_placed, win, total_minions_and_neutral_minions_killed
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+            $16, $17, $18, $19, $20, $21
+        ) ON CONFLICT (summoner_id, match_id) DO NOTHING
+    `, summonerID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
+       matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID,
+       matchData.GameMode, matchData.GameType, matchData.Kills, matchData.Deaths,
+       matchData.Result, matchData.Pentakills, matchData.TeamPosition,
+       matchData.TotalDamageDealtToChampions, matchData.TotalMinionsKilled,
+       matchData.NeutralMinionsKilled, matchData.WardsKilled, matchData.WardsPlaced,
+       matchData.Win, matchData.TotalMinionsKilled + matchData.NeutralMinionsKilled)
+    if err != nil {
+        return fmt.Errorf("error inserting match data: %w", err)
+    }
 
-//     return summoners, rows.Err()
-// }
+    return nil
+}
+
+func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
+    rows, err := s.db.Query(`
+        SELECT s.riot_summoner_id, s.riot_account_id, s.riot_summoner_puuid, 
+               s.profile_icon_id, s.revision_date, s.summoner_level, s.name,
+               COALESCE(le.tier || ' ' || le.rank, 'Unranked') as rank, 
+               COALESCE(le.league_points, 0) as league_points
+        FROM summoners s
+        LEFT JOIN league_entries le ON s.id = le.summoner_id AND le.queue_type = 'RANKED_SOLO_5x5'
+        JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
+        WHERE gsa.guild_id = $1
+    `, guildID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var summoners []riotapi.Summoner
+    for rows.Next() {
+        var s riotapi.Summoner
+        if err := rows.Scan(
+            &s.RiotSummonerID, &s.RiotAccountID, &s.SummonerPUUID,
+            &s.ProfileIconID, &s.RevisionDate, &s.SummonerLevel, &s.Name,
+            &s.Rank, &s.LeaguePoints,
+        ); err != nil {
+            return nil, err
+        }
+        summoners = append(summoners, s)
+    }
+
+    return summoners, rows.Err()
+}
 
 func (s *Storage) Close() error {
     return s.db.Close()
