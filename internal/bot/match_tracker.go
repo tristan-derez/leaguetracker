@@ -68,7 +68,7 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) {
 			log.Printf("New match found for %s. Waiting for 10 minutes before next check", summoner.Name)
 			time.Sleep(10 * time.Minute)
 		} else {
-			time.Sleep(5 * time.Minute)
+			time.Sleep(3 * time.Minute)
 		}
 	}
 }
