@@ -1,0 +1,5 @@
+- Add field "lastLP" in Summoner so we can calculate the gain in lp with each game
+- Add field "gameEndTimestamp" in GameInfo so we get the date and time for the game.
+- Add field "teamDamagePercentage" (float: ig 0.18928992244050874) for GameData (present in "challenges").
+- Get the image (probably from data dragon) - probably should implement a cache system for this.
+- Add a 24h recap with the winrate for the day and number of lp gained.
