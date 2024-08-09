@@ -9,25 +9,33 @@ import (
 	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
 )
 
-// TrackMatches initiates match tracking for all summoners in a given guild
 func (b *Bot) TrackMatches(guildID string) error {
-	summoners, err := b.storage.GetAllSummonersForGuild(guildID)
-	if err != nil {
-		return fmt.Errorf("error getting summoners: %w", err)
-	}
+	ticker := time.NewTicker(2 * time.Minute)
+	defer ticker.Stop()
 
-	log.Printf("tracking summoners...")
+	trackedSummoners := make(map[string]bool)
 
-	if len(summoners) == 0 {
-		time.Sleep(2 * time.Minute)
-	}
+	for range ticker.C {
+		summoners, err := b.storage.GetAllSummonersForGuild(guildID)
+		if err != nil {
+			log.Printf("Error getting summoners: %v", err)
+			continue
+		}
 
-	// Start a goroutine for each summoner to track their matches
-	for i, summoner := range summoners {
-		go func(s riotapi.Summoner) {
-			time.Sleep(time.Duration(i) * 10 * time.Second)
-			b.trackSummonerMatches(guildID, s)
-		}(summoner)
+		log.Printf("Tracking summoner...")
+
+		for _, summoner := range summoners {
+			if !trackedSummoners[summoner.SummonerPUUID] {
+				trackedSummoners[summoner.SummonerPUUID] = true
+				go func(s riotapi.Summoner) {
+
+					for {
+						b.trackSummonerMatches(guildID, s)
+						time.Sleep(2 * time.Minute)
+					}
+				}(summoner)
+			}
+		}
 	}
 
 	return nil
