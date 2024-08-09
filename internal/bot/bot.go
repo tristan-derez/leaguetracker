@@ -111,6 +111,10 @@ func (b *Bot) registerCommands() error {
 			},
 		},
 		{
+			Name:        "unchannel",
+			Description: "Remove the assigned channel for updates about matches of summoners",
+		},
+		{
 			Name:        "list",
 			Description: "List all followed summoners",
 		},
