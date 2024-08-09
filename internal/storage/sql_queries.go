@@ -38,9 +38,9 @@ const (
     `
 
 	insertGuildSummonerAssociationSQL SQLQuery = `
-    INSERT INTO guild_summoner_associations (guild_id, channel_id, summoner_id, created_at, updated_at)
-    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    ON CONFLICT (guild_id, channel_id, summoner_id) DO NOTHING
+    INSERT INTO guild_summoner_associations (guild_id, summoner_id, created_at, updated_at)
+    VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (guild_id, summoner_id) DO NOTHING
     `
 
 	deleteSummonerSQL SQLQuery = `
@@ -51,13 +51,13 @@ const (
 	insertMatchDataSQL SQLQuery = `
     INSERT INTO matches (
             summoner_id, match_id, champion_name, game_creation, game_duration,
-            game_end_timestamp, game_id, game_mode, game_type, kills, deaths,
+            game_end_timestamp, game_id, game_mode, game_type, kills, deaths, assists,
             result, pentakills, team_position, total_damage_dealt_to_champions,
             total_minions_killed, neutral_minions_killed, wards_killed,
             wards_placed, win, total_minions_and_neutral_minions_killed
     ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-            $16, $17, $18, $19, $20, $21
+            $16, $17, $18, $19, $20, $21, $22
     ) ON CONFLICT (summoner_id, match_id) DO NOTHING
     `
 
@@ -95,5 +95,18 @@ const (
     UPDATE guild_summoner_associations
     SET channel_id = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE guild_id = $1 AND channel_id = $2
+    `
+
+	selectAllSummonersForAGuildSQL SQLQuery = `
+    SELECT s.riot_summoner_puuid, s.name
+    FROM summoners s
+    JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
+    WHERE gsa.guild_id = $1
+    `
+
+	updateGuildWithChannelIDSQL SQLQuery = `
+    UPDATE guilds
+    SET channel_id = $2, updated_at = CURRENT_TIMESTAMP
+    WHERE guild_id = $1
     `
 )

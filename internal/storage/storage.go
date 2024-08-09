@@ -2,14 +2,17 @@ package storage
 
 import (
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"log"
-	"os"
 
 	_ "github.com/lib/pq"
 	"github.com/tristan-derez/league-tracker/internal/config"
 	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
 )
+
+//go:embed sql/init_db.sql
+var initDBSQL string
 
 type Storage struct {
 	db *sql.DB
@@ -34,12 +37,7 @@ func New(config *config.Config) (*Storage, error) {
 }
 
 func (s *Storage) initDB() error {
-	sqlFile, err := os.ReadFile("sql/init_db.sql")
-	if err != nil {
-		return fmt.Errorf("error reading init_db.sql: %w", err)
-	}
-
-	_, err = s.db.Exec(string(sqlFile))
+	_, err := s.db.Exec(initDBSQL)
 	if err != nil {
 		return fmt.Errorf("error executing init_db.sql: %w", err)
 	}
@@ -59,7 +57,7 @@ func (s *Storage) AddGuild(guildID, guildName string) error {
 	return err
 }
 
-// AddSummoner adds or updates a summoner's information, their league entry if available, and associates them with a guild in the database
+// AddSummoner adds or updates a summoner's information, their league entry if available, and associates them with a guild in the database.
 func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner riotapi.Summoner, leagueEntry *riotapi.LeagueEntry) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -91,6 +89,11 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 		return fmt.Errorf("insert guild-summoner association: %w", err)
 	}
 
+	_, err = tx.Exec(string(updateGuildWithChannelIDSQL), guildID, channelID)
+	if err != nil {
+		return fmt.Errorf("update guild channel: %w", err)
+	}
+
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
@@ -98,7 +101,7 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 	return nil
 }
 
-// RemoveSummoner removes a summoner from the database, but only the summoner associated to a guild
+// RemoveSummoner removes a summoner from the database, but only the summoner associated to a guild.
 func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
 	_, err := s.db.Exec(string(deleteSummonerSQL), guildID, summonerName)
 	return err
@@ -117,7 +120,7 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData) 
 
 	_, err = s.db.Exec(string(insertMatchDataSQL), summonerID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
 		matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID,
-		matchData.GameMode, matchData.GameType, matchData.Kills, matchData.Deaths,
+		matchData.GameMode, matchData.GameType, matchData.Kills, matchData.Deaths, matchData.Assists,
 		matchData.Result, matchData.Pentakills, matchData.TeamPosition,
 		matchData.TotalDamageDealtToChampions, matchData.TotalMinionsKilled,
 		matchData.NeutralMinionsKilled, matchData.WardsKilled, matchData.WardsPlaced,
@@ -200,4 +203,24 @@ func (s *Storage) RemoveChannelFromGuild(guildID, channelID string) error {
 	}
 
 	return nil
+}
+
+// GetAllSummonersForGuild retrieve and returns summoners in a guild list in the database.
+func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, error) {
+	rows, err := s.db.Query(string(selectAllSummonersForAGuildSQL), guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var summoners []riotapi.Summoner
+	for rows.Next() {
+		var s riotapi.Summoner
+		if err := rows.Scan(&s.SummonerPUUID, &s.Name); err != nil {
+			return nil, err
+		}
+		summoners = append(summoners, s)
+	}
+
+	return summoners, rows.Err()
 }

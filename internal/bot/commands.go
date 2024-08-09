@@ -65,7 +65,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	lastMatchData, err := b.riotClient.GetLastMatchData(account.SummonerPUUID)
+	lastMatchData, err := b.riotClient.GetLastMatchDataForNewSummoner(account.SummonerPUUID)
 	if err != nil {
 		log.Printf("Error fetching last match data: %v", err)
 	}

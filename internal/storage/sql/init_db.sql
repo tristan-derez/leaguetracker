@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS matches (
     game_type TEXT NOT NULL,
     kills INTEGER NOT NULL,
     deaths INTEGER NOT NULL,
+    assists INTEGER NOT NULL,
     result TEXT NOT NULL,
     pentakills INTEGER NOT NULL,
     team_position TEXT NOT NULL,
