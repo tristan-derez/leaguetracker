@@ -98,7 +98,7 @@ const (
     `
 
 	selectAllSummonersForAGuildSQL SQLQuery = `
-    SELECT s.riot_summoner_puuid, s.name
+    SELECT s.riot_summoner_puuid, s.name, s.riot_summoner_id
     FROM summoners s
     JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
     WHERE gsa.guild_id = $1

@@ -210,7 +210,7 @@ func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, e
 	var summoners []riotapi.Summoner
 	for rows.Next() {
 		var s riotapi.Summoner
-		if err := rows.Scan(&s.SummonerPUUID, &s.Name); err != nil {
+		if err := rows.Scan(&s.SummonerPUUID, &s.Name, &s.RiotSummonerID); err != nil {
 			return nil, err
 		}
 		summoners = append(summoners, s)

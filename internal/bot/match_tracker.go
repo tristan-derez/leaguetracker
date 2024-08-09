@@ -36,7 +36,7 @@ func (b *Bot) TrackMatches(guildID string) error {
 // trackSummonerMatches continuously checks for new matches for a specific summoner
 func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) {
 	for {
-		log.Printf("Checking for new ranked solo/duo matches for %s (PUUID: %s)", summoner.Name, summoner.SummonerPUUID)
+		log.Printf("Checking for new ranked solo/duo matches for %s (PUUID: %s, RiotSummonerId: %s)", summoner.Name, summoner.SummonerPUUID, summoner.RiotSummonerID)
 
 		storedMatchID, err := b.storage.GetLastMatchID(summoner.SummonerPUUID)
 		if err != nil {
