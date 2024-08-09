@@ -119,7 +119,7 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData) 
 	}
 
 	_, err = s.db.Exec(string(insertMatchDataSQL), summonerID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
-		matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID,
+		matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID, matchData.QueueID,
 		matchData.GameMode, matchData.GameType, matchData.Kills, matchData.Deaths, matchData.Assists,
 		matchData.Result, matchData.Pentakills, matchData.TeamPosition,
 		matchData.TotalDamageDealtToChampions, matchData.TotalMinionsKilled,

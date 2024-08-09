@@ -191,7 +191,7 @@ func (c *Client) GetLastMatchDataForNewSummoner(summonerPUUID string) (*MatchDat
 }
 
 // GetNewMatchForSummoner checks if there's a new match for a summoner we're already tracking.
-// It returns a boolean indicating if there's a new match, and the new match data if there is one.
+// It returns a boolean indicating if there's a new match, and the new match data if there is one and if its a ranked solo/duo game.
 func (c *Client) GetNewMatchForSummoner(summonerPUUID string, lastKnownMatchID string) (bool, *MatchData, error) {
 	matchID, err := c.GetLastMatchID(summonerPUUID)
 	if err != nil {
@@ -205,6 +205,11 @@ func (c *Client) GetNewMatchForSummoner(summonerPUUID string, lastKnownMatchID s
 	matchData, err := c.GetMatchData(matchID, summonerPUUID)
 	if err != nil {
 		return false, nil, fmt.Errorf("error getting match data: %w", err)
+	}
+
+	// queue_id for ranked 5x5 solo/duo games is 4
+	if matchData.QueueID == 4 {
+		return true, matchData, nil
 	}
 
 	return true, matchData, nil
@@ -251,6 +256,7 @@ type MatchData struct {
 	GameDuration                int
 	GameEndTimestamp            int64
 	GameID                      int64
+	QueueID                     int
 	GameMode                    string
 	GameType                    string
 	Kills                       int

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS matches (
     game_duration INTEGER NOT NULL,
     game_end_timestamp BIGINT NOT NULL,
     game_id BIGINT NOT NULL,
+    queue_id INT NOT NULL,
     game_mode TEXT NOT NULL,
     game_type TEXT NOT NULL,
     kills INTEGER NOT NULL,
