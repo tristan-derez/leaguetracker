@@ -3,6 +3,7 @@ package riotapi
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -137,10 +138,12 @@ func createMatchData(matchID string, info matchInfo, participant participant) *M
 		GameDuration:                info.GameDuration,
 		GameEndTimestamp:            info.GameEndTimestamp,
 		GameID:                      info.GameId,
+		QueueID:                     info.QueueId,
 		GameMode:                    info.GameMode,
 		GameType:                    info.GameType,
 		Kills:                       participant.Kills,
 		Deaths:                      participant.Deaths,
+		Assists:                     participant.Assists,
 		Result:                      result,
 		Pentakills:                  participant.PentaKills,
 		TeamPosition:                participant.TeamPosition,
@@ -153,36 +156,41 @@ func createMatchData(matchID string, info matchInfo, participant participant) *M
 	}
 }
 
-func (c *Client) GetLastMatchID(puuid string) (string, error) {
-	url := fmt.Sprintf("https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids?count=1", puuid)
+func (c *Client) GetRankedSoloMatchIDs(puuid string, count int) ([]string, error) {
+	url := fmt.Sprintf("https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids?queue=420&count=%d", puuid, count)
 
 	resp, err := c.makeRequest(url)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var matchIDs []string
 	if err := json.NewDecoder(resp.Body).Decode(&matchIDs); err != nil {
-		return "", fmt.Errorf("error decoding response: %w", err)
+		return nil, fmt.Errorf("error decoding response: %w", err)
+	}
+
+	log.Printf("Retrieved %d ranked solo match IDs", len(matchIDs))
+
+	if len(matchIDs) == 0 {
+		log.Printf("No ranked solo matches found for PUUID: %s", puuid)
+		return nil, fmt.Errorf("no ranked solo matches found for the given PUUID")
+	}
+
+	return matchIDs, nil
+}
+
+func (c *Client) GetLastRankedSoloMatchData(summonerPUUID string) (*MatchData, error) {
+	matchIDs, err := c.GetRankedSoloMatchIDs(summonerPUUID, 1)
+	if err != nil {
+		return nil, fmt.Errorf("error getting match IDs: %w", err)
 	}
 
 	if len(matchIDs) == 0 {
-		return "", fmt.Errorf("no matches found for the given PUUID")
+		return nil, fmt.Errorf("no recent ranked solo matches found")
 	}
 
-	return matchIDs[0], nil
-}
-
-// GetLastMatchForNewSummoner gets the last match for a new summoner being added for tracking.
-// It returns the match data even if there are no matches (returns nil, nil in this case).
-func (c *Client) GetLastMatchDataForNewSummoner(summonerPUUID string) (*MatchData, error) {
-	matchID, err := c.GetLastMatchID(summonerPUUID)
-	if err != nil {
-		return nil, fmt.Errorf("error getting last match ID: %w", err)
-	}
-
-	matchData, err := c.GetMatchData(matchID, summonerPUUID)
+	matchData, err := c.GetMatchData(matchIDs[0], summonerPUUID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting match data: %w", err)
 	}
@@ -190,26 +198,27 @@ func (c *Client) GetLastMatchDataForNewSummoner(summonerPUUID string) (*MatchDat
 	return matchData, nil
 }
 
-// GetNewMatchForSummoner checks if there's a new match for a summoner we're already tracking.
-// It returns a boolean indicating if there's a new match, and the new match data if there is one and if its a ranked solo/duo game.
+// GetNewMatchForSummoner checks if there's a new ranked solo/duo match for a summoner we're already tracking.
+// It returns a boolean indicating if there's a new match, and the new match data if there is one.
 func (c *Client) GetNewMatchForSummoner(summonerPUUID string, lastKnownMatchID string) (bool, *MatchData, error) {
-	matchID, err := c.GetLastMatchID(summonerPUUID)
+	matchIDs, err := c.GetRankedSoloMatchIDs(summonerPUUID, 1)
 	if err != nil {
 		return false, nil, fmt.Errorf("error getting last match ID: %w", err)
 	}
 
-	if matchID == "" || matchID == lastKnownMatchID {
+	if len(matchIDs) == 0 {
 		return false, nil, nil // No new matches
 	}
 
-	matchData, err := c.GetMatchData(matchID, summonerPUUID)
-	if err != nil {
-		return false, nil, fmt.Errorf("error getting match data: %w", err)
+	latestMatchID := matchIDs[0]
+
+	if latestMatchID == lastKnownMatchID {
+		return false, nil, nil // No new matches
 	}
 
-	// queue_id for ranked 5x5 solo/duo games is 4
-	if matchData.QueueID == 4 {
-		return true, matchData, nil
+	matchData, err := c.GetMatchData(latestMatchID, summonerPUUID)
+	if err != nil {
+		return false, nil, fmt.Errorf("error getting match data: %w", err)
 	}
 
 	return true, matchData, nil
@@ -282,6 +291,7 @@ type matchInfo struct {
 	GameDuration     int           `json:"gameDuration"`
 	GameEndTimestamp int64         `json:"gameEndTimestamp"`
 	GameId           int64         `json:"gameId"`
+	QueueId          int           `json:"queueId"`
 	GameMode         string        `json:"gameMode"`
 	GameType         string        `json:"gameType"`
 	Participants     []participant `json:"participants"`

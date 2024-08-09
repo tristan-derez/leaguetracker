@@ -109,4 +109,13 @@ const (
     SET channel_id = $2, updated_at = CURRENT_TIMESTAMP
     WHERE guild_id = $1
     `
+
+	// get last match id from db
+	selectLastMatchIDSQL SQLQuery = `
+    SELECT match_id
+    FROM matches
+    WHERE summoner_id = (SELECT id FROM summoners WHERE riot_summoner_puuid = $1)
+    ORDER BY game_end_timestamp DESC
+    LIMIT 1
+	`
 )

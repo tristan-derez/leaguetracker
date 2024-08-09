@@ -171,13 +171,7 @@ func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 // GetLastMatchID retrieves the most recent match ID for a given summoner PUUID.
 func (s *Storage) GetLastMatchID(puuid string) (string, error) {
 	var matchID string
-	err := s.db.QueryRow(`
-		SELECT match_id
-		FROM matches
-		WHERE summoner_id = (SELECT id FROM summoners WHERE riot_summoner_puuid = $1)
-		ORDER BY game_end_timestamp DESC
-		LIMIT 1
-	`, puuid).Scan(&matchID)
+	err := s.db.QueryRow(string(selectLastMatchIDSQL), puuid).Scan(&matchID)
 
 	if err == sql.ErrNoRows {
 		return "", nil
