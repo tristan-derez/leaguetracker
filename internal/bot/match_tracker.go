@@ -16,8 +16,10 @@ func (b *Bot) TrackMatches(guildID string) error {
 		return fmt.Errorf("error getting summoners: %w", err)
 	}
 
+	log.Printf("tracking summoners...")
+
 	if len(summoners) == 0 {
-		time.Sleep(10 * time.Minute)
+		time.Sleep(2 * time.Minute)
 	}
 
 	// Start a goroutine for each summoner to track their matches
