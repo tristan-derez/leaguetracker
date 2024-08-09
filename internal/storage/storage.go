@@ -15,6 +15,7 @@ type Storage struct {
 	db *sql.DB
 }
 
+// New creates and initializes a new Storage instance connected to the specified PostgreSQL database
 func New(config *config.Config) (*Storage, error) {
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		config.DBHost, config.DBPort, config.DBUsername, config.DBPassword, config.DBDatabase)
@@ -47,6 +48,7 @@ func (s *Storage) initDB() error {
 	return nil
 }
 
+// AddGuild adds or update a guild row to the database
 func (s *Storage) AddGuild(guildID, guildName string) error {
 	_, err := s.db.Exec(`
         INSERT INTO guilds (guild_id, guild_name, created_at, updated_at)
@@ -57,7 +59,8 @@ func (s *Storage) AddGuild(guildID, guildName string) error {
 	return err
 }
 
-func (s *Storage) AddSummoner(guildID, summonerName string, summoner riotapi.Summoner, leagueEntry *riotapi.LeagueEntry) error {
+// AddSummoner adds or updates a summoner's information, their league entry if available, and associates them with a guild in the database
+func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner riotapi.Summoner, leagueEntry *riotapi.LeagueEntry) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -95,11 +98,13 @@ func (s *Storage) AddSummoner(guildID, summonerName string, summoner riotapi.Sum
 	return nil
 }
 
+// RemoveSummoner removes a summoner from the database, but only the summoner associated to a guild
 func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
 	_, err := s.db.Exec(string(deleteSummonerSQL), guildID, summonerName)
 	return err
 }
 
+// AddMatch adds a new match record to the database for a given summoner, using their riot_summoner_id.
 func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData) error {
 	var summonerID int
 	err := s.db.QueryRow("SELECT id FROM summoners WHERE riot_summoner_id = $1", riotSummonerID).Scan(&summonerID)
@@ -124,6 +129,7 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData) 
 	return nil
 }
 
+// ListSummoners retrieves and returns a list of summoners with their ranks for a given guild ID.
 func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
 	rows, err := s.db.Query(string(selectSummonerWithRankSQL), guildID)
 	if err != nil {
@@ -151,6 +157,7 @@ func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
+// GetGuildChannelID retrieves the channel ID associated with a given guild ID.
 func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 	var channelID string
 	err := s.db.QueryRow(string(selectChannelIdFromGuildIdSQL), guildID).Scan(&channelID)
@@ -158,6 +165,7 @@ func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 	return channelID, err
 }
 
+// GetLastMatchID retrieves the most recent match ID for a given summoner PUUID.
 func (s *Storage) GetLastMatchID(puuid string) (string, error) {
 	var matchID string
 	err := s.db.QueryRow(`
@@ -173,4 +181,23 @@ func (s *Storage) GetLastMatchID(puuid string) (string, error) {
 	}
 
 	return matchID, err
+}
+
+// RemoveChannelFromGuild removes the association between a channel and a guild in the database.
+func (s *Storage) RemoveChannelFromGuild(guildID, channelID string) error {
+	result, err := s.db.Exec(string(removeChannelFromGuildSQL), guildID, channelID)
+	if err != nil {
+		return fmt.Errorf("error removing channel from guild association: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no association found for this guild and channel")
+	}
+
+	return nil
 }

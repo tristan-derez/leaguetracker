@@ -14,7 +14,8 @@ const (
         profile_icon_id = EXCLUDED.profile_icon_id,
         revision_date = EXCLUDED.revision_date,
         updated_at = CURRENT_TIMESTAMP 
-    RETURNING id`
+    RETURNING id
+    `
 
 	insertLeagueEntrySQL SQLQuery = `
     INSERT INTO league_entries (
@@ -33,13 +34,14 @@ const (
         veteran = EXCLUDED.veteran,
         fresh_blood = EXCLUDED.fresh_blood,
         inactive = EXCLUDED.inactive,
-        updated_at = CURRENT_TIMESTAMP`
+        updated_at = CURRENT_TIMESTAMP
+    `
 
 	insertGuildSummonerAssociationSQL SQLQuery = `
-    INSERT INTO guild_summoner_associations (guild_id, summoner_id, created_at, updated_at)
-    VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    ON CONFLICT (guild_id, summoner_id) 
-    DO UPDATE SET updated_at = CURRENT_TIMESTAMP`
+    INSERT INTO guild_summoner_associations (guild_id, channel_id, summoner_id, created_at, updated_at)
+    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (guild_id, channel_id, summoner_id) DO NOTHING
+    `
 
 	deleteSummonerSQL SQLQuery = `
         DELETE FROM guild_summoner_associations
@@ -87,5 +89,11 @@ const (
     SELECT channel_id
 	FROM guilds
 	WHERE guild_id = $1
+    `
+
+	removeChannelFromGuildSQL SQLQuery = `
+    UPDATE guild_summoner_associations
+    SET channel_id = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE guild_id = $1 AND channel_id = $2
     `
 )
