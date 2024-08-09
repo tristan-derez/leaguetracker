@@ -170,8 +170,6 @@ func (c *Client) GetRankedSoloMatchIDs(puuid string, count int) ([]string, error
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
 
-	log.Printf("Retrieved %d ranked solo match IDs", len(matchIDs))
-
 	if len(matchIDs) == 0 {
 		log.Printf("No ranked solo matches found for PUUID: %s", puuid)
 		return nil, fmt.Errorf("no ranked solo matches found for the given PUUID")
