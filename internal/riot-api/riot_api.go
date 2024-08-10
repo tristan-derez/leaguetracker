@@ -3,6 +3,7 @@ package riotapi
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -220,6 +221,34 @@ func (c *Client) GetNewMatchForSummoner(summonerPUUID string, lastKnownMatchID s
 	}
 
 	return true, matchData, nil
+}
+
+func (c *Client) GetCurrentDDragonVersion() (string, error) {
+	const defaultVersion string = "14.15.1"
+	url := "https://ddragon.leagueoflegends.com/api/versions.json"
+
+	resp, err := c.makeRequest(url)
+	if err != nil {
+		return defaultVersion, fmt.Errorf("error making request: %w. using default version", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return defaultVersion, fmt.Errorf("error reading response body: %w. using default version", err)
+	}
+
+	var versions []string
+	err = json.Unmarshal(body, &versions)
+	if err != nil {
+		return defaultVersion, fmt.Errorf("error unmarshaling JSON: %w. using default version", err)
+	}
+
+	if len(versions) == 0 {
+		return defaultVersion, fmt.Errorf("no versions found in the response. using default version")
+	}
+
+	return versions[0], nil
 }
 
 type Account struct {

@@ -77,7 +77,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	if lastMatchData != nil {
-		if err := b.storage.AddMatch(summoner.RiotSummonerID, lastMatchData); err != nil {
+		if err := b.storage.AddMatch(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints); err != nil {
 			log.Printf("Error adding match to database: %v", err)
 		}
 	}
@@ -85,7 +85,8 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("Summoner '%s' (Level %d) is now being tracked in this server.", summonerName, summoner.SummonerLevel),
+			Content: fmt.Sprintf("Summoner '%s' (Level %d) is now being tracked in this server. Current Rank: %s %s %d LP",
+				summonerName, summoner.SummonerLevel, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints),
 		},
 	})
 }

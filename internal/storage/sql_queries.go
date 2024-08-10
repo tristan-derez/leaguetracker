@@ -118,4 +118,39 @@ const (
     ORDER BY game_end_timestamp DESC
     LIMIT 1
 	`
+
+	// get previous lp from league entries in database
+	selectLeaguePointsFromLeagueEntriesSQL SQLQuery = `
+    SELECT league_points FROM league_entries WHERE summoner_id = $1 AND queue_type = 'RANKED_SOLO_5x5'
+    `
+
+	// insert LP change into lp_history
+	insertLPChangeIntoLPHistorySQL SQLQuery = `
+    INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
+    VALUES ($1, $2, $3, $4)
+    `
+	// update LP in league entries
+	updateLPinLeagueEntriesSQL SQLQuery = `
+    UPDATE league_entries
+    SET league_points = $1, updated_at = CURRENT_TIMESTAMP
+    WHERE summoner_id = $2 AND queue_type = 'RANKED_SOLO_5x5'
+    `
+	selectLastKnownLPSQL SQLQuery = `
+    SELECT new_lp
+    FROM lp_history
+    WHERE summoner_id = (SELECT id FROM summoners WHERE riot_summoner_id = $1)
+    ORDER BY timestamp DESC
+    LIMIT 1
+    `
+
+	insertLPHistorySQL SQLQuery = `
+    INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
+    VALUES ((SELECT id FROM summoners WHERE riot_summoner_id = $1), $2, $3, $4)
+    `
+
+	selectPreviousRankInLeagueEntriesSQL SQLQuery = `
+    SELECT tier, rank, league_points
+    FROM league_entries
+    WHERE summoner_id = $1
+    `
 )

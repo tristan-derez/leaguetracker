@@ -66,6 +66,15 @@ CREATE TABLE IF NOT EXISTS matches (
     UNIQUE(summoner_id, match_id)
 );
 
+CREATE TABLE IF NOT EXISTS lp_history (
+    id SERIAL PRIMARY KEY,
+    summoner_id INTEGER REFERENCES summoners(id),
+    match_id TEXT NOT NULL,
+    lp_change INTEGER NOT NULL,
+    new_lp INTEGER NOT NULL,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS guild_summoner_associations (
     guild_id TEXT REFERENCES guilds(guild_id),
     summoner_id INTEGER REFERENCES summoners(id),
