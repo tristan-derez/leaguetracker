@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS matches (
     result TEXT NOT NULL,
     pentakills INTEGER NOT NULL,
     team_position TEXT NOT NULL,
+    team_damage_percentage DOUBLE PRECISION NOT NULL,
+    kill_participation DOUBLE PRECISION NOT NULL,
     total_damage_dealt_to_champions INTEGER NOT NULL,
     total_minions_killed INTEGER NOT NULL,
     neutral_minions_killed INTEGER NOT NULL,

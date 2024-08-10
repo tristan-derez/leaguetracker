@@ -140,6 +140,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	oldRank := fmt.Sprintf("%s %s (%dlp)", previousRank.PrevTier, previousRank.PrevRank, previousRank.PrevLP)
 	currentRank := fmt.Sprintf("%s %s (%dlp)", rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
 	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, endOfGameStr)
+	TeamDmgOwnPercentage := fmt.Sprintf(" %.2f%% team's damage", match.TeamDamagePercentage*100)
 
 	// Create the embed
 	embed := &dg.MessageEmbed{
@@ -150,7 +151,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 		},
 		Fields: []*dg.MessageEmbedField{
 			{
-				Value:  fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) - dmg + KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
+				Value:  fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.2f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
 				Inline: false,
 			},
 			{

@@ -148,6 +148,8 @@ func createMatchData(matchID string, info matchInfo, participant participant) *M
 		Result:                      result,
 		Pentakills:                  participant.PentaKills,
 		TeamPosition:                participant.TeamPosition,
+		TeamDamagePercentage:        participant.Challenges.TeamDamagePercentage,
+		KillParticipation:           participant.Challenges.KillParticipation,
 		TotalDamageDealtToChampions: participant.TotalDamageDealtToChampions,
 		TotalMinionsKilled:          participant.TotalMinionsKilled,
 		NeutralMinionsKilled:        participant.NeutralMinionsKilled,
@@ -302,6 +304,8 @@ type MatchData struct {
 	Pentakills                  int
 	TeamPosition                string
 	TotalDamageDealtToChampions int
+	TeamDamagePercentage        float64
+	KillParticipation           float64
 	TotalMinionsKilled          int
 	NeutralMinionsKilled        int
 	WardsKilled                 int
@@ -325,17 +329,23 @@ type matchInfo struct {
 }
 
 type participant struct {
-	ChampionName                string `json:"championName"`
-	Kills                       int    `json:"kills"`
-	Deaths                      int    `json:"deaths"`
-	Assists                     int    `json:"assists"`
-	PentaKills                  int    `json:"pentaKills"`
-	TeamPosition                string `json:"teamPosition"`
-	TotalDamageDealtToChampions int    `json:"totalDamageDealtToChampions"`
-	TotalMinionsKilled          int    `json:"totalMinionsKilled"`
-	NeutralMinionsKilled        int    `json:"neutralMinionsKilled"`
-	WardsKilled                 int    `json:"wardsKilled"`
-	WardsPlaced                 int    `json:"wardsPlaced"`
-	Win                         bool   `json:"win"`
-	Puuid                       string `json:"puuid"`
+	ChampionName                string    `json:"championName"`
+	Kills                       int       `json:"kills"`
+	Deaths                      int       `json:"deaths"`
+	Assists                     int       `json:"assists"`
+	PentaKills                  int       `json:"pentaKills"`
+	TeamPosition                string    `json:"teamPosition"`
+	TotalDamageDealtToChampions int       `json:"totalDamageDealtToChampions"`
+	TotalMinionsKilled          int       `json:"totalMinionsKilled"`
+	NeutralMinionsKilled        int       `json:"neutralMinionsKilled"`
+	WardsKilled                 int       `json:"wardsKilled"`
+	WardsPlaced                 int       `json:"wardsPlaced"`
+	Win                         bool      `json:"win"`
+	Puuid                       string    `json:"puuid"`
+	Challenges                  challenge `json:"challenges"`
+}
+
+type challenge struct {
+	TeamDamagePercentage float64 `json:"teamDamagePercentage"`
+	KillParticipation    float64 `json:"killParticipation"`
 }

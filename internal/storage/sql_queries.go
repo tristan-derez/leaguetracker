@@ -52,12 +52,12 @@ const (
     INSERT INTO matches (
             summoner_id, match_id, champion_name, game_creation, game_duration,
             game_end_timestamp, game_id, queue_id, game_mode, game_type, kills, deaths, assists,
-            result, pentakills, team_position, total_damage_dealt_to_champions,
+            result, pentakills, team_position, team_damage_percentage, kill_participation, total_damage_dealt_to_champions,
             total_minions_killed, neutral_minions_killed, wards_killed,
             wards_placed, win, total_minions_and_neutral_minions_killed
     ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-            $16, $17, $18, $19, $20, $21, $22, $23
+            $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
     ) ON CONFLICT (summoner_id, match_id) DO NOTHING
     `
 
