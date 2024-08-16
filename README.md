@@ -13,6 +13,8 @@ summoners and receive notifications about their recent matches, including rank c
 - Maintain a history of tracked matches and summoner statistics
 - Simple command interface for managing tracked summoners
 
+![](./docs/feature-screenshot.png)
+
 ## Tech Stack
 
 - Go (Golang)
