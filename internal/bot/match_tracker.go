@@ -140,7 +140,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	oldRank := fmt.Sprintf("%s %s (%dlp)", previousRank.PrevTier, previousRank.PrevRank, previousRank.PrevLP)
 	currentRank := fmt.Sprintf("%s %s (%dlp)", rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
 	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, endOfGameStr)
-	TeamDmgOwnPercentage := fmt.Sprintf(" %.2f%% team's damage", match.TeamDamagePercentage*100)
+	TeamDmgOwnPercentage := fmt.Sprintf(" %.2f%% of team's damage", match.TeamDamagePercentage*100)
 
 	// Create the embed
 	embed := &dg.MessageEmbed{
