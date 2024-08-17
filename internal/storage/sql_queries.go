@@ -153,4 +153,12 @@ const (
     FROM league_entries
     WHERE summoner_id = $1
     `
+
+	selectLPChangesOfSummonersLast24HoursSQL SQLQuery = `
+    SELECT lh.timestamp, lh.new_lp
+    FROM lp_history lh
+    JOIN summoners s ON lh.summoner_id = s.id
+    WHERE s.riot_summoner_id = $1 AND lh.timestamp > NOW() - INTERVAL '24 hours'
+    ORDER BY lh.timestamp ASC
+	`
 )

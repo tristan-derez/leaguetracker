@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/tristan-derez/league-tracker/internal/config"
@@ -300,8 +301,36 @@ func (s *Storage) GetPreviousRank(summonerID int) (*PreviousRank, error) {
 	return &prevRank, nil
 }
 
+func (s *Storage) GetLPChangesForLast24Hours(riotSummonerID string) ([]LPChange, error) {
+	rows, err := s.db.Query(string(selectLPChangesOfSummonersLast24HoursSQL), riotSummonerID)
+	if err != nil {
+		return nil, fmt.Errorf("error querying LP changes: %w", err)
+	}
+	defer rows.Close()
+
+	var lpChanges []LPChange
+	for rows.Next() {
+		var change LPChange
+		if err := rows.Scan(&change.Timestamp, &change.NewLP); err != nil {
+			return nil, fmt.Errorf("error scanning LP change data: %w", err)
+		}
+		lpChanges = append(lpChanges, change)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating LP change data rows: %w", err)
+	}
+
+	return lpChanges, nil
+}
+
 type PreviousRank struct {
 	PrevTier string
 	PrevRank string
 	PrevLP   int
+}
+
+type LPChange struct {
+	Timestamp time.Time
+	NewLP     int
 }
