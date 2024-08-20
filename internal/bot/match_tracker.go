@@ -126,10 +126,12 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 
 	// Determine embed color based on match result
 	var embedColor int
-	switch strings.ToLower(match.Result) {
-	case "win":
+	switch {
+	case match.GameDuration < 240:
+		embedColor = 0x808080 // Grey
+	case strings.ToLower(match.Result) == "win":
 		embedColor = 0x00FF00 // Green
-	case "loss":
+	case strings.ToLower(match.Result) == "loss":
 		embedColor = 0xFF0000 // Red
 	default:
 		embedColor = 0x808080 // Grey
