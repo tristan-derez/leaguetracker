@@ -109,7 +109,7 @@ func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
 }
 
 // AddMatch adds a new match record to the database for a given summoner, using their riot_summoner_id.
-func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, newLP int) error {
+func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, newLP int, newRank string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -135,12 +135,12 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 		return fmt.Errorf("error inserting match data: %w", err)
 	}
 
-	previousLP, err := s.GetLastKnownLP(summonerID)
+	previousRank, err := s.GetPreviousRank(summonerID)
 	if err != nil {
-		return fmt.Errorf("error fetching previous LP: %w", err)
+		return fmt.Errorf("error fetching previous rank: %w", err)
 	}
 
-	lpChange := newLP - previousLP
+	lpChange := s.CalculateLPChange(previousRank.PrevTier, newRank, previousRank.PrevLP, newLP)
 
 	_, err = tx.Exec(string(insertLPChangeIntoLPHistorySQL), summonerID, matchData.MatchID, lpChange, newLP)
 	if err != nil {
@@ -153,6 +153,14 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 	}
 
 	return tx.Commit()
+}
+
+func (s *Storage) CalculateLPChange(oldTier, newTier string, oldLP, newLP int) int {
+	if oldTier == "DIAMOND" && newTier == "MASTER" {
+		return (100 - oldLP) + newLP
+	}
+
+	return newLP - oldLP
 }
 
 // ListSummoners retrieves and returns a list of summoners with their ranks for a given guild ID.
