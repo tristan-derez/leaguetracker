@@ -142,14 +142,6 @@ const (
         AND queue_type = 'RANKED_SOLO_5x5'
     `
 
-	selectLastKnownLPSQL SQLQuery = `
-    SELECT new_lp
-    FROM lp_history
-    WHERE summoner_id = (SELECT id FROM summoners WHERE riot_summoner_id = $1)
-    ORDER BY timestamp DESC
-    LIMIT 1
-    `
-
 	insertLPHistorySQL SQLQuery = `
     INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
     VALUES ((SELECT id FROM summoners WHERE riot_summoner_id = $1), $2, $3, $4)
