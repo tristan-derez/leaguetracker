@@ -143,12 +143,12 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	currentRank := fmt.Sprintf("%s %s (%dlp)", rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
 	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, endOfGameStr)
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
-	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", match.MatchID)
+	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 
 	// Create the embed
 	embed := &dg.MessageEmbed{
-		Title: fmt.Sprintf("[%s (%s LP)](%s)", summoner.Name, lpChangeStr, leagueOfGraphLink),
-		Color: embedColor,
+		Description: fmt.Sprintf("**[%s (%s LP)](%s)**", summoner.Name, lpChangeStr, leagueOfGraphLink),
+		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
 		},
