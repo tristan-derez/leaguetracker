@@ -156,10 +156,22 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 }
 
 func (s *Storage) CalculateLPChange(oldTier, newTier string, oldLP, newLP int) int {
-	if oldTier == "DIAMOND" && newTier == "MASTER" {
-		return (100 - oldLP) + newLP
+	oldTierRank, oldExists := tierOrder[oldTier]
+	newTierRank, newExists := tierOrder[newTier]
+
+	if !oldExists || !newExists {
+		return newLP - oldLP
 	}
 
+	if oldTierRank < newTierRank {
+		// Promotion
+		return (100 - oldLP) + newLP
+	} else if oldTierRank > newTierRank {
+		// Demotion
+		return -(oldLP) - (100 - newLP)
+	}
+
+	// Same tier, normal LP change
 	return newLP - oldLP
 }
 
@@ -341,4 +353,17 @@ type PreviousRank struct {
 type LPChange struct {
 	Timestamp time.Time
 	NewLP     int
+}
+
+var tierOrder = map[string]int{
+	"IRON":        0,
+	"BRONZE":      1,
+	"SILVER":      2,
+	"GOLD":        3,
+	"PLATINUM":    4,
+	"EMERALD":     5,
+	"DIAMOND":     6,
+	"MASTER":      7,
+	"GRANDMASTER": 8,
+	"CHALLENGER":  9,
 }
