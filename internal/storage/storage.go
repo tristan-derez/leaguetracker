@@ -109,7 +109,7 @@ func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
 }
 
 // AddMatch adds a new match record to the database for a given summoner, using their riot_summoner_id.
-func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, newLP int, newRank string) error {
+func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, newLP int, newRank, newTier string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -147,7 +147,7 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 		return fmt.Errorf("error insterting LP history: %w", err)
 	}
 
-	_, err = tx.Exec(string(updateLPinLeagueEntriesSQL), newLP, summonerID)
+	_, err = tx.Exec(string(updateLPinLeagueEntriesSQL), newLP, newTier, newRank, summonerID)
 	if err != nil {
 		return fmt.Errorf("error updating league entry: %w", err)
 	}

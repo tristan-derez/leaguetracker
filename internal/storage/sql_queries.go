@@ -129,12 +129,19 @@ const (
     INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
     VALUES ($1, $2, $3, $4)
     `
-	// update LP in league entries
+	// update LP, rank and tier in league entries
 	updateLPinLeagueEntriesSQL SQLQuery = `
     UPDATE league_entries
-    SET league_points = $1, updated_at = CURRENT_TIMESTAMP
-    WHERE summoner_id = $2 AND queue_type = 'RANKED_SOLO_5x5'
+    SET 
+        league_points = $1, 
+        tier = $2, 
+        rank = $3, 
+        updated_at = CURRENT_TIMESTAMP
+    WHERE 
+        summoner_id = $4 
+        AND queue_type = 'RANKED_SOLO_5x5'
     `
+
 	selectLastKnownLPSQL SQLQuery = `
     SELECT new_lp
     FROM lp_history
