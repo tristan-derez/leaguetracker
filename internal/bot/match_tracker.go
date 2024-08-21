@@ -85,7 +85,7 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) {
 
 	// Add the new match to the database
 	// This will also update the LP history and league entries
-	if err := b.storage.AddMatch(summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Tier, currentRankInfo.Rank); err != nil {
+	if err := b.storage.AddMatch(summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Rank, currentRankInfo.Tier); err != nil {
 		log.Printf("Error storing match for %s: %v", summoner.Name, err)
 		return
 	}
