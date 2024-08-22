@@ -64,6 +64,7 @@ func (c *Client) GetSummonerByPUUID(puuid string) (*Summoner, error) {
 	return &summoner, nil
 }
 
+// Get summoner current tier and rank from RIOT API
 func (c *Client) GetSummonerRank(summonerID string) (*LeagueEntry, error) {
 	url := fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v4/entries/by-summoner/%s", c.region, summonerID)
 
@@ -95,6 +96,7 @@ func (c *Client) GetSummonerRank(summonerID string) (*LeagueEntry, error) {
 	return nil, fmt.Errorf("no solo queue entry found for summoner ID %s", summonerID)
 }
 
+// Get summoner match data using the matchID, summonerPUUID is used to find participant
 func (c *Client) GetMatchData(matchID string, summonerPUUID string) (*MatchData, error) {
 	url := fmt.Sprintf("https://europe.api.riotgames.com/lol/match/v5/matches/%s", matchID)
 

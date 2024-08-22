@@ -3,6 +3,15 @@ package storage
 type SQLQuery string
 
 const (
+	// insert or update a new guild into guilds table
+	insertNewGuildSQL SQLQuery = `
+        INSERT INTO guilds (guild_id, guild_name, created_at, updated_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (guild_id) 
+        DO UPDATE SET guild_name = $2, updated_at = CURRENT_TIMESTAMP
+    `
+
+	// insert or update a summoner into summoners table
 	insertSummonerSQL SQLQuery = `
     INSERT INTO summoners (
         name, riot_account_id, riot_summoner_id, riot_summoner_puuid, summoner_level, profile_icon_id, 
@@ -17,6 +26,7 @@ const (
     RETURNING id
     `
 
+	// insert a league entry for a summoner
 	insertLeagueEntrySQL SQLQuery = `
     INSERT INTO league_entries (
         summoner_id, queue_type, tier, rank, league_points,
@@ -37,17 +47,20 @@ const (
         updated_at = CURRENT_TIMESTAMP
     `
 
+	// associate a summoner to a guild
 	insertGuildSummonerAssociationSQL SQLQuery = `
     INSERT INTO guild_summoner_associations (guild_id, summoner_id, created_at, updated_at)
     VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT (guild_id, summoner_id) DO NOTHING
     `
 
+	// delete an association of a summoner from a guild
 	deleteSummonerSQL SQLQuery = `
         DELETE FROM guild_summoner_associations
         WHERE guild_id = $1 AND summoner_id = (SELECT id FROM summoners WHERE name = $2)
     `
 
+	// insert match data into matches table
 	insertMatchDataSQL SQLQuery = `
     INSERT INTO matches (
             summoner_id, match_id, champion_name, game_creation, game_duration,
@@ -61,6 +74,7 @@ const (
     ) ON CONFLICT (summoner_id, match_id) DO NOTHING
     `
 
+	// gives the rank from a summoner by joining summoners and league entries
 	selectSummonerWithRankSQL SQLQuery = `
     SELECT 
         s.riot_summoner_id, 
@@ -85,12 +99,14 @@ const (
         gsa.guild_id = $1
     `
 
+	// get the channel id from guilds table
 	selectChannelIdFromGuildIdSQL SQLQuery = `
     SELECT channel_id
 	FROM guilds
 	WHERE guild_id = $1
     `
 
+	// remove the attributed channel for updates from guild
 	removeChannelFromGuildSQL SQLQuery = `
     UPDATE guild_summoner_associations
     SET channel_id = NULL, updated_at = CURRENT_TIMESTAMP
@@ -124,11 +140,6 @@ const (
     SELECT league_points FROM league_entries WHERE summoner_id = $1 AND queue_type = 'RANKED_SOLO_5x5'
     `
 
-	// insert LP change into lp_history
-	insertLPChangeIntoLPHistorySQL SQLQuery = `
-    INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
-    VALUES ($1, $2, $3, $4)
-    `
 	// update LP, rank and tier in league entries
 	updateLeagueEntriesSQL SQLQuery = `
     UPDATE league_entries
@@ -142,22 +153,22 @@ const (
         AND queue_type = 'RANKED_SOLO_5x5'
     `
 
+	// update lp in lp_history with a summoner id
 	insertLPHistorySQL SQLQuery = `
     INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
     VALUES ((SELECT id FROM summoners WHERE riot_summoner_id = $1), $2, $3, $4)
     `
 
-	selectPreviousRankInLeagueEntriesSQL SQLQuery = `
+	// update lp in lp_history with a riot summoner id
+	insertLPHistoryByRiotIDSQL SQLQuery = `
+    INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
+    VALUES ((SELECT id FROM summoners WHERE riot_summoner_id = $1), $2, $3, $4)
+    `
+
+	// get rank from league entries
+	selectRankInLeagueEntriesSQL SQLQuery = `
     SELECT tier, rank, league_points
     FROM league_entries
     WHERE summoner_id = $1
     `
-
-	selectLPChangesOfSummonersLast24HoursSQL SQLQuery = `
-    SELECT lh.timestamp, lh.new_lp
-    FROM lp_history lh
-    JOIN summoners s ON lh.summoner_id = s.id
-    WHERE s.riot_summoner_id = $1 AND lh.timestamp > NOW() - INTERVAL '24 hours'
-    ORDER BY lh.timestamp ASC
-	`
 )

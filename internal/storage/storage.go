@@ -51,12 +51,7 @@ func (s *Storage) initDB() error {
 
 // AddGuild adds or update a guild row to the database
 func (s *Storage) AddGuild(guildID, guildName string) error {
-	_, err := s.db.Exec(`
-        INSERT INTO guilds (guild_id, guild_name, created_at, updated_at)
-        VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ON CONFLICT (guild_id) 
-        DO UPDATE SET guild_name = $2, updated_at = CURRENT_TIMESTAMP
-    `, guildID, guildName)
+	_, err := s.db.Exec(string(insertNewGuildSQL), guildID, guildName)
 	return err
 }
 
@@ -110,7 +105,7 @@ func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
 	return err
 }
 
-// AddMatch adds a new match record to the database for a given summoner, using their riot_summoner_id.
+// AddMatch adds a new match record to the database for a given summoner and also update lp_history and league_entry
 func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, newLP int, newRank, newTier string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -126,15 +121,9 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 		return fmt.Errorf("error fetching summoner ID: %w", err)
 	}
 
-	_, err = s.db.Exec(string(insertMatchDataSQL), summonerID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
-		matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID, matchData.QueueID,
-		matchData.GameMode, matchData.GameType, matchData.Kills, matchData.Deaths, matchData.Assists,
-		matchData.Result, matchData.Pentakills, matchData.TeamPosition, matchData.TeamDamagePercentage, matchData.KillParticipation,
-		matchData.TotalDamageDealtToChampions, matchData.TotalMinionsKilled,
-		matchData.NeutralMinionsKilled, matchData.WardsKilled, matchData.WardsPlaced,
-		matchData.Win, matchData.TotalMinionsKilled+matchData.NeutralMinionsKilled)
+	err = s.insertMatchData(summonerID, matchData)
 	if err != nil {
-		return fmt.Errorf("error inserting match data: %w", err)
+		return err
 	}
 
 	previousRank, err := s.GetPreviousRank(summonerID)
@@ -144,17 +133,55 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
 
-	_, err = tx.Exec(string(insertLPChangeIntoLPHistorySQL), summonerID, matchData.MatchID, lpChange, newLP)
+	err = s.updateLPHistory(summonerID, matchData.MatchID, lpChange, newLP)
 	if err != nil {
-		return fmt.Errorf("error insterting LP history: %w", err)
+		return err
 	}
 
-	_, err = tx.Exec(string(updateLeagueEntriesSQL), newLP, newTier, newRank, summonerID)
+	err = s.updateLeagueEntry(summonerID, newLP, newTier, newRank)
 	if err != nil {
-		return fmt.Errorf("error updating league entry: %w", err)
+		return err
 	}
 
 	return tx.Commit()
+}
+
+func (s *Storage) insertMatchData(summonerID int, matchData *riotapi.MatchData) error {
+	_, err := s.db.Exec(string(insertMatchDataSQL), summonerID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
+		matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID, matchData.QueueID,
+		matchData.GameMode, matchData.GameType, matchData.Kills, matchData.Deaths, matchData.Assists,
+		matchData.Result, matchData.Pentakills, matchData.TeamPosition, matchData.TeamDamagePercentage, matchData.KillParticipation,
+		matchData.TotalDamageDealtToChampions, matchData.TotalMinionsKilled,
+		matchData.NeutralMinionsKilled, matchData.WardsKilled, matchData.WardsPlaced,
+		matchData.Win, matchData.TotalMinionsKilled+matchData.NeutralMinionsKilled)
+	if err != nil {
+		return fmt.Errorf("error inserting match data: %w", err)
+	}
+	return nil
+}
+
+func (s *Storage) updateLPHistory(summonerID int, matchID string, lpChange, newLP int) error {
+	_, err := s.db.Exec(string(insertLPHistorySQL), summonerID, matchID, lpChange, newLP)
+	if err != nil {
+		return fmt.Errorf("error inserting LP history: %w", err)
+	}
+	return nil
+}
+
+func (s *Storage) UpdateLPHistoryByRiotID(riotSummonerID, matchID string, lpChange, newLP int) error {
+	_, err := s.db.Exec(string(insertLPHistoryByRiotIDSQL), riotSummonerID, matchID, lpChange, newLP)
+	if err != nil {
+		return fmt.Errorf("error updating LP history by Riot ID: %w", err)
+	}
+	return nil
+}
+
+func (s *Storage) updateLeagueEntry(summonerID int, newLP int, newTier, newRank string) error {
+	_, err := s.db.Exec(string(updateLeagueEntriesSQL), newLP, newTier, newRank, summonerID)
+	if err != nil {
+		return fmt.Errorf("error updating league entry: %w", err)
+	}
+	return nil
 }
 
 func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, oldLP, newLP int) int {
@@ -280,7 +307,7 @@ func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, e
 	return summoners, rows.Err()
 }
 
-// UpdateLPHistory updates the LP for a summoner in the league_entries table
+// UpdateLPHistory updates the LP for a summoner in the lp_history table
 func (s *Storage) UpdateLPHistory(riotSummonerID, matchID string, lpChange, newLP int) error {
 	_, err := s.db.Exec(string(insertLPHistorySQL), riotSummonerID, matchID, lpChange, newLP)
 	if err != nil {
@@ -326,7 +353,7 @@ func (s *Storage) GetLastLPChange(summonerID int) (int, error) {
 // Retrieves PreviousRank from LeagueEntries using summonerID, to be used before updating entries
 func (s *Storage) GetPreviousRank(summonerID int) (*PreviousRank, error) {
 	var prevRank PreviousRank
-	err := s.db.QueryRow(string(selectPreviousRankInLeagueEntriesSQL), summonerID).Scan(&prevRank.PrevTier, &prevRank.PrevRank, &prevRank.PrevLP)
+	err := s.db.QueryRow(string(selectRankInLeagueEntriesSQL), summonerID).Scan(&prevRank.PrevTier, &prevRank.PrevRank, &prevRank.PrevLP)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// No previous rank found, return nil with no error
@@ -337,29 +364,6 @@ func (s *Storage) GetPreviousRank(summonerID int) (*PreviousRank, error) {
 	}
 
 	return &prevRank, nil
-}
-
-func (s *Storage) GetLPChangesForLast24Hours(riotSummonerID string) ([]LPChange, error) {
-	rows, err := s.db.Query(string(selectLPChangesOfSummonersLast24HoursSQL), riotSummonerID)
-	if err != nil {
-		return nil, fmt.Errorf("error querying LP changes: %w", err)
-	}
-	defer rows.Close()
-
-	var lpChanges []LPChange
-	for rows.Next() {
-		var change LPChange
-		if err := rows.Scan(&change.Timestamp, &change.NewLP); err != nil {
-			return nil, fmt.Errorf("error scanning LP change data: %w", err)
-		}
-		lpChanges = append(lpChanges, change)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating LP change data rows: %w", err)
-	}
-
-	return lpChanges, nil
 }
 
 type PreviousRank struct {
