@@ -154,9 +154,9 @@ const (
     `
 
 	// update lp in lp_history with a summoner id
-	insertLPHistorySQL SQLQuery = `
+	insertLPInLPHistorySQL SQLQuery = `
     INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
-    VALUES ((SELECT id FROM summoners WHERE riot_summoner_id = $1), $2, $3, $4)
+    VALUES ($1, $2, $3, $4)
     `
 
 	// update lp in lp_history with a riot summoner id

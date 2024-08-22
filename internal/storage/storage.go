@@ -166,7 +166,7 @@ func (s *Storage) insertMatchData(summonerID int, matchData *riotapi.MatchData) 
 }
 
 func (s *Storage) updateLPHistory(summonerID int, matchID string, lpChange, newLP int) error {
-	_, err := s.db.Exec(string(insertLPHistorySQL), summonerID, matchID, lpChange, newLP)
+	_, err := s.db.Exec(string(insertLPInLPHistorySQL), summonerID, matchID, lpChange, newLP)
 	if err != nil {
 		return fmt.Errorf("error inserting LP history: %w", err)
 	}
@@ -314,7 +314,7 @@ func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, e
 
 // UpdateLPHistory updates the LP for a summoner in the lp_history table
 func (s *Storage) UpdateLPHistory(riotSummonerID, matchID string, lpChange, newLP int) error {
-	_, err := s.db.Exec(string(insertLPHistorySQL), riotSummonerID, matchID, lpChange, newLP)
+	_, err := s.db.Exec(string(insertLPInLPHistorySQL), riotSummonerID, matchID, lpChange, newLP)
 	if err != nil {
 		return fmt.Errorf("error updating LP history: %w", err)
 	}
