@@ -191,40 +191,45 @@ func (s *Storage) updateLeagueEntry(summonerID int, newLP int, newTier, newRank 
 }
 
 func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, oldLP, newLP int) int {
+	log.Printf("Debug: CalculateLPChange input - oldTier: %s, newTier: %s, oldRank: %s, newRank: %s, oldLP: %d, newLP: %d",
+		oldTier, newTier, oldRank, newRank, oldLP, newLP)
+
 	oldTier = strings.ToUpper(oldTier)
 	newTier = strings.ToUpper(newTier)
 
-	oldTierRank, oldExists := tierOrder[oldTier]
-	newTierRank, newExists := tierOrder[newTier]
-
-	if !oldExists || !newExists {
-		log.Printf("Warning: Unknown tier encountered. Old Tier: %s, New Tier: %s", oldTier, newTier)
-		return newLP - oldLP
-	}
-
-	if oldTierRank < newTierRank {
-		// Promotion
-		return (100 - oldLP) + newLP
-	} else if oldTierRank > newTierRank {
-		// Demotion
-		return -(oldLP) - (100 - newLP)
-	}
-
-	// Same tier, check for division changes
 	oldDivision := utils.GetRankValue(oldRank)
 	newDivision := utils.GetRankValue(newRank)
 
-	if oldDivision > newDivision {
-		// Promotion within the same tier
-		lpChange := (100 - oldLP) + newLP
-		log.Printf("Debug: Promotion within tier. Old LP: %d, New LP: %d, Calculated LP Change: %d", oldLP, newLP, lpChange)
-		return lpChange
-	} else if oldDivision < newDivision {
-		// Demotion within the same tier
-		return -(oldLP + newLP)
+	log.Printf("Debug: Division values - oldDivision: %d, newDivision: %d", oldDivision, newDivision)
+
+	var lpChange int
+	if oldTier != newTier {
+		if tierOrder[newTier] > tierOrder[oldTier] {
+			// Promotion to a new tier
+			lpChange = (100 - oldLP) + newLP
+			log.Printf("Debug: Promotion to new tier. LP Change: %d", lpChange)
+		} else {
+			// Demotion to a lower tier
+			lpChange = -(oldLP) - (100 - newLP)
+			log.Printf("Debug: Demotion to lower tier. LP Change: %d", lpChange)
+		}
+	} else if oldDivision != newDivision {
+		if newDivision > oldDivision {
+			// Promotion within the same tier
+			lpChange = (100 - oldLP) + newLP
+			log.Printf("Debug: Promotion within tier. LP Change: %d", lpChange)
+		} else {
+			// Demotion within the same tier
+			lpChange = -(oldLP) - (100 - newLP)
+			log.Printf("Debug: Demotion within tier. LP Change: %d", lpChange)
+		}
+	} else {
+		// Same division, normal LP change
+		lpChange = newLP - oldLP
+		log.Printf("Debug: Same division, normal LP change. LP Change: %d", lpChange)
 	}
-	// Same division, normal LP change
-	return newLP - oldLP
+
+	return lpChange
 }
 
 // ListSummoners retrieves and returns a list of summoners with their ranks for a given guild ID.
