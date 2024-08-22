@@ -132,6 +132,7 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	}
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
+	log.Printf("Debug: Calculated LP Change: %d", lpChange)
 
 	err = s.updateLPHistory(summonerID, matchData.MatchID, lpChange, newLP)
 	if err != nil {
@@ -215,12 +216,13 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 
 	if oldDivision > newDivision {
 		// Promotion within the same tier
-		return (100 - oldLP) + newLP
+		lpChange := (100 - oldLP) + newLP
+		log.Printf("Debug: Promotion within tier. Old LP: %d, New LP: %d, Calculated LP Change: %d", oldLP, newLP, lpChange)
+		return lpChange
 	} else if oldDivision < newDivision {
 		// Demotion within the same tier
-		return -(oldLP) - (100 - newLP)
+		return -(oldLP + newLP)
 	}
-
 	// Same division, normal LP change
 	return newLP - oldLP
 }

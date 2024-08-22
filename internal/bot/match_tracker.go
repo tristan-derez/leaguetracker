@@ -131,6 +131,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	}
 
 	lpChangeStr := fmt.Sprintf("%+d", lpChange)
+	log.Printf("Debug: LP Change being displayed: %d", lpChange)
 	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
 	oldRank := fmt.Sprintf("%s %s (%dlp)", previousRank.PrevTier, previousRank.PrevRank, previousRank.PrevLP)
 	currentRank := fmt.Sprintf("%s %s (%dlp)", rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
