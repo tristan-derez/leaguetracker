@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/tristan-derez/league-tracker/internal/config"
 	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
+	"github.com/tristan-derez/league-tracker/internal/utils"
 )
 
 //go:embed sql/init_db.sql
@@ -177,8 +178,8 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 	}
 
 	// Same tier, check for division changes
-	oldDivision := getRankValue(oldRank)
-	newDivision := getRankValue(newRank)
+	oldDivision := utils.GetRankValue(oldRank)
+	newDivision := utils.GetRankValue(newRank)
 
 	if oldDivision > newDivision {
 		// Promotion within the same tier
@@ -190,21 +191,6 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 
 	// Same division, normal LP change
 	return newLP - oldLP
-}
-
-func getRankValue(rank string) int {
-	switch strings.ToUpper(rank) {
-	case "I":
-		return 4
-	case "II":
-		return 3
-	case "III":
-		return 2
-	case "IV":
-		return 1
-	default:
-		return 0
-	}
 }
 
 // ListSummoners retrieves and returns a list of summoners with their ranks for a given guild ID.
