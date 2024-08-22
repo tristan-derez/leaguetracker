@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -141,13 +142,14 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 	}
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newRank, previousRank.PrevLP, newLP)
+	log.Printf("Calculated LP Change: %d, previous lp was: %d", lpChange, previousRank.PrevLP)
 
 	_, err = tx.Exec(string(insertLPChangeIntoLPHistorySQL), summonerID, matchData.MatchID, lpChange, newLP)
 	if err != nil {
 		return fmt.Errorf("error insterting LP history: %w", err)
 	}
 
-	_, err = tx.Exec(string(updateLPinLeagueEntriesSQL), newLP, newTier, newRank, summonerID)
+	_, err = tx.Exec(string(updateLeagueEntriesSQL), newLP, newTier, newRank, summonerID)
 	if err != nil {
 		return fmt.Errorf("error updating league entry: %w", err)
 	}
@@ -156,10 +158,14 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 }
 
 func (s *Storage) CalculateLPChange(oldTier, newTier string, oldLP, newLP int) int {
+	oldTier = strings.ToUpper(oldTier)
+	newTier = strings.ToUpper(newTier)
+
 	oldTierRank, oldExists := tierOrder[oldTier]
 	newTierRank, newExists := tierOrder[newTier]
 
 	if !oldExists || !newExists {
+		log.Printf("Warning: Unknown tier encountered. Old Tier: %s, New Tier: %s", oldTier, newTier)
 		return newLP - oldLP
 	}
 

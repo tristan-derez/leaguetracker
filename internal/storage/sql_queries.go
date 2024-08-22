@@ -130,7 +130,7 @@ const (
     VALUES ($1, $2, $3, $4)
     `
 	// update LP, rank and tier in league entries
-	updateLPinLeagueEntriesSQL SQLQuery = `
+	updateLeagueEntriesSQL SQLQuery = `
     UPDATE league_entries
     SET 
         league_points = $1, 
