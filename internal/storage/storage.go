@@ -142,7 +142,6 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 	}
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
-	log.Printf("Calculated LP Change: %d, previous lp was: %d", lpChange, previousRank.PrevLP)
 
 	_, err = tx.Exec(string(insertLPChangeIntoLPHistorySQL), summonerID, matchData.MatchID, lpChange, newLP)
 	if err != nil {
