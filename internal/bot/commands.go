@@ -77,8 +77,9 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	if lastMatchData != nil {
-		if err := b.storage.AddMatch(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier); err != nil {
-			log.Printf("Error adding match to database: %v", err)
+		_, err := b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
+		if err != nil {
+			log.Printf("Error adding match to database and calculating LP change: %v", err)
 		}
 	}
 

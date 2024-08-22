@@ -70,9 +70,11 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) {
 		return
 	}
 
+	// Get previous rank before adding the new match
 	previousRank, err := b.storage.GetPreviousRank(summonerID)
 	if err != nil {
 		log.Printf("Error getting previous rank: %v", err)
+		return
 	}
 
 	currentRankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
@@ -81,18 +83,11 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) {
 		return
 	}
 
-	// Add the new match to the database
-	// This will also update the LP history and league entries
-	if err := b.storage.AddMatch(summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Rank, currentRankInfo.Tier); err != nil {
-		log.Printf("Error storing match for %s: %v", summoner.Name, err)
-		return
-	}
-
-	//get lp_change from last entry from lp_history table based on summoner_id
-	lpChange, err := b.storage.GetLastLPChange(summonerID)
+	// Add the new match to the database and get the LP change
+	lpChange, err := b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Rank, currentRankInfo.Tier)
 	if err != nil {
-		log.Printf("Error getting LP change for %s: %v", summoner.Name, err)
-		lpChange = 0
+		log.Printf("Error storing match and calculating LP change for %s: %v", summoner.Name, err)
+		return
 	}
 
 	// Get current version for champion image
