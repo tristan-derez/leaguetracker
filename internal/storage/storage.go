@@ -141,7 +141,7 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 		return fmt.Errorf("error fetching previous rank: %w", err)
 	}
 
-	lpChange := s.CalculateLPChange(previousRank.PrevTier, newRank, previousRank.PrevLP, newLP)
+	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
 	log.Printf("Calculated LP Change: %d, previous lp was: %d", lpChange, previousRank.PrevLP)
 
 	_, err = tx.Exec(string(insertLPChangeIntoLPHistorySQL), summonerID, matchData.MatchID, lpChange, newLP)
@@ -157,7 +157,7 @@ func (s *Storage) AddMatch(riotSummonerID string, matchData *riotapi.MatchData, 
 	return tx.Commit()
 }
 
-func (s *Storage) CalculateLPChange(oldTier, newTier string, oldLP, newLP int) int {
+func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, oldLP, newLP int) int {
 	oldTier = strings.ToUpper(oldTier)
 	newTier = strings.ToUpper(newTier)
 
@@ -177,8 +177,35 @@ func (s *Storage) CalculateLPChange(oldTier, newTier string, oldLP, newLP int) i
 		return -(oldLP) - (100 - newLP)
 	}
 
-	// Same tier, normal LP change
+	// Same tier, check for division changes
+	oldDivision := getRankValue(oldRank)
+	newDivision := getRankValue(newRank)
+
+	if oldDivision > newDivision {
+		// Promotion within the same tier
+		return (100 - oldLP) + newLP
+	} else if oldDivision < newDivision {
+		// Demotion within the same tier
+		return -(oldLP) - (100 - newLP)
+	}
+
+	// Same division, normal LP change
 	return newLP - oldLP
+}
+
+func getRankValue(rank string) int {
+	switch strings.ToUpper(rank) {
+	case "I":
+		return 4
+	case "II":
+		return 3
+	case "III":
+		return 2
+	case "IV":
+		return 1
+	default:
+		return 0
+	}
 }
 
 // ListSummoners retrieves and returns a list of summoners with their ranks for a given guild ID.
