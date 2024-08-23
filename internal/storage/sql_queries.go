@@ -18,10 +18,11 @@ const (
         revision_date, created_at, updated_at
     ) 
     VALUES ($1, $2, $3, $4, $5, $6, $7::BIGINT, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-    ON CONFLICT (name) DO UPDATE SET 
+    ON CONFLICT (riot_summoner_id) DO UPDATE SET 
+        name = EXCLUDED.name,
         summoner_level = EXCLUDED.summoner_level,
         profile_icon_id = EXCLUDED.profile_icon_id,
-        revision_date = EXCLUDED.revision_date,
+        revision_date = EXCLUDED.revision_date
         updated_at = CURRENT_TIMESTAMP 
     RETURNING id
     `
@@ -43,7 +44,7 @@ const (
         hot_streak = EXCLUDED.hot_streak,
         veteran = EXCLUDED.veteran,
         fresh_blood = EXCLUDED.fresh_blood,
-        inactive = EXCLUDED.inactive,
+        inactive = EXCLUDED.inactive
         updated_at = CURRENT_TIMESTAMP
     `
 
