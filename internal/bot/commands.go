@@ -17,7 +17,7 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 	case "remove":
 		b.handleRemove(s, i)
 	case "resetfollowing":
-		b.handleResetFollowing(s, i)
+		b.handleReset(s, i)
 	case "list":
 		b.handleList(s, i)
 	case "unchannel":
@@ -135,22 +135,41 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
 	})
 }
 
-func (b *Bot) handleResetFollowing(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	guildID := i.GuildID
-
-	err := b.storage.RemoveAllSummoners(guildID)
+// handleReset removes all summoners followed within the guild
+func (b *Bot) handleReset(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// Respond immediately to avoid timeout
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "Processing reset command...",
+		},
+	})
 	if err != nil {
-		log.Printf("Error resetting summoners for guild %s: %v", guildID, err)
-		respondWithError(s, i, "An error occurred while resetting summoners. Please try again later.")
+		log.Printf("Error responding to interaction: %v", err)
 		return
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "All summoners have been removed from tracking in this server.",
-		},
+	guildID := i.GuildID
+
+	// Remove all summoners
+	err = b.storage.RemoveAllSummoners(guildID)
+	if err != nil {
+		log.Printf("Error resetting summoners for guild %s: %v", guildID, err)
+		sendFollowUpMessage(s, i, "An error occurred while resetting summoners. Please try again later.")
+		return
+	}
+
+	// Send a success message
+	sendFollowUpMessage(s, i, "All summoners have been removed from tracking in this server.")
+}
+
+func sendFollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: content,
 	})
+	if err != nil {
+		log.Printf("Error sending follow-up message: %v", err)
+	}
 }
 
 // List all summoners from a guild with their respective ranks
