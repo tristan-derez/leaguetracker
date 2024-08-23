@@ -197,6 +197,12 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 	oldTier = strings.ToUpper(oldTier)
 	newTier = strings.ToUpper(newTier)
 
+	// Special handling for Master, Grandmaster, and Challenger tiers
+	highTiers := map[string]bool{"MASTER": true, "GRANDMASTER": true, "CHALLENGER": true}
+	if highTiers[oldTier] && highTiers[newTier] {
+		return newLP - oldLP
+	}
+
 	oldDivision := utils.GetRankValue(oldRank)
 	newDivision := utils.GetRankValue(newRank)
 
