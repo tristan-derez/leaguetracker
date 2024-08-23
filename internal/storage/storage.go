@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -99,10 +100,35 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 	return nil
 }
 
-// RemoveSummoner removes a summoner from the database, but only the summoner associated to a guild.
+// ErrSummonerNotFound is returned when a summoner is not found in the database
+var ErrSummonerNotFound = errors.New("summoner not found")
+
+// RemoveSummoner removes one or more summoner(s) from the database, but only the summoner associated to a guild.
 func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
-	_, err := s.db.Exec(string(deleteSummonerSQL), guildID, summonerName)
-	return err
+	result, err := s.db.Exec(string(deleteSummonerSQL), guildID, summonerName)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrSummonerNotFound
+	}
+
+	return nil
+}
+
+// RemoveAllSummoners removes all summoners associated with a guild from the database.
+func (s *Storage) RemoveAllSummoners(guildID string) error {
+	_, err := s.db.Exec(string(removeAllSummonersFromGuildSQL), guildID)
+	if err != nil {
+		return fmt.Errorf("error removing all summoners from guild: %w", err)
+	}
+	return nil
 }
 
 // AddMatch adds a new match record to the database for a given summoner and also update lp_history and league_entry

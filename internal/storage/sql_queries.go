@@ -171,4 +171,10 @@ const (
     FROM league_entries
     WHERE summoner_id = $1
     `
+
+	// remove all summoners associated to a guild
+	removeAllSummonersFromGuildSQL SQLQuery = `
+    DELETE FROM guild_summoner_associations
+    WHERE guild_id = $1
+	`
 )

@@ -88,12 +88,12 @@ func (b *Bot) registerCommands() error {
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "add",
-			Description: "Add a League of Legends summoner to the followed list",
+			Description: "Add one or more League of Legends summoners to the followed list",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "summoner",
-					Description: "The summoner name to add to the followed list",
+					Name:        "summoners",
+					Description: "The summoner name(s) to add to the followed list (comma-separated for multiple)",
 					Required:    true,
 				},
 			},
@@ -104,11 +104,15 @@ func (b *Bot) registerCommands() error {
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "summoner",
-					Description: "The summoner name to remove from the followed list",
+					Name:        "summoners",
+					Description: "The summoner names to remove from the followed list (comma-separated for multiple)",
 					Required:    true,
 				},
 			},
+		},
+		{
+			Name:        "reset",
+			Description: "Remove all summoners from the followed list for this server",
 		},
 		{
 			Name:        "unchannel",
