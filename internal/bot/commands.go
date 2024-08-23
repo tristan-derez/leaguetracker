@@ -36,64 +36,80 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	summonerNames := strings.Split(options[0].StringValue(), ",")
-	var responses []string
 
-	for _, summonerName := range summonerNames {
-		summonerName = strings.TrimSpace(strings.ToLower(summonerName))
-		parts := strings.SplitN(summonerName, "#", 2)
-
-		if len(parts) != 2 {
-			responses = append(responses, fmt.Sprintf("❌ Invalid format for '%s'. Use Name#Tag.", summonerName))
-			continue
-		}
-
-		gameName := strings.TrimSpace(parts[0])
-		tagLine := strings.TrimSpace(parts[1])
-
-		account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
-		if err != nil {
-			if strings.Contains(err.Error(), "rate limit exceeded") {
-				responses = append(responses, "⚠️ Rate limit exceeded. Please try again later.")
-				break // Stop processing further summoners
-			}
-			responses = append(responses, fmt.Sprintf("❌ Unable to find '%s'.", summonerName))
-			continue
-		}
-
-		summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
-		if err != nil {
-			responses = append(responses, fmt.Sprintf("❌ Error fetching details for '%s'.", summonerName))
-			continue
-		}
-
-		rankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
-		if err != nil {
-			responses = append(responses, fmt.Sprintf("❌ Error fetching rank for '%s'.", summonerName))
-			continue
-		}
-
-		if err := b.storage.AddSummoner(i.GuildID, i.ChannelID, summonerName, *summoner, rankInfo); err != nil {
-			responses = append(responses, fmt.Sprintf("❌ Error adding '%s' to database.", summonerName))
-			continue
-		}
-
-		responses = append(responses, fmt.Sprintf("✅ '%s' (Level %d) added. Rank: %s %s %d LP",
-			summonerName, summoner.SummonerLevel, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
-
-		lastMatchData, _ := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
-		if lastMatchData != nil {
-			b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
-		}
-	}
-
-	finalResponse := strings.Join(responses, "\n")
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	// Respond immediately to avoid timeout
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: finalResponse,
+			Content: "Adding summoner(s)...",
 		},
 	})
+	if err != nil {
+		log.Printf("Error responding to interaction: %v", err)
+		return
+	}
+
+	go func() {
+		var responses []string
+
+		for _, summonerName := range summonerNames {
+			summonerName = strings.TrimSpace(strings.ToLower(summonerName))
+			parts := strings.SplitN(summonerName, "#", 2)
+
+			if len(parts) != 2 {
+				responses = append(responses, fmt.Sprintf("❌ Invalid format for '%s'. Use Name#Tag.", summonerName))
+				continue
+			}
+
+			gameName := strings.TrimSpace(parts[0])
+			tagLine := strings.TrimSpace(parts[1])
+
+			account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
+			if err != nil {
+				if strings.Contains(err.Error(), "rate limit exceeded") {
+					responses = append(responses, "⚠️ Rate limit exceeded. Please try again later.")
+					break // Stop processing further summoners
+				}
+				responses = append(responses, fmt.Sprintf("❌ Unable to find '%s'.", summonerName))
+				continue
+			}
+
+			summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
+			if err != nil {
+				responses = append(responses, fmt.Sprintf("❌ Error fetching details for '%s'.", summonerName))
+				continue
+			}
+
+			rankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
+			if err != nil {
+				responses = append(responses, fmt.Sprintf("❌ Error fetching rank for '%s'.", summonerName))
+				continue
+			}
+
+			if err := b.storage.AddSummoner(i.GuildID, i.ChannelID, summonerName, *summoner, rankInfo); err != nil {
+				responses = append(responses, fmt.Sprintf("❌ Error adding '%s' to database.", summonerName))
+				continue
+			}
+
+			responses = append(responses, fmt.Sprintf("✅ '%s' (Level %d) added. Rank: %s %s %d LP",
+				summonerName, summoner.SummonerLevel, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
+
+			lastMatchData, _ := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
+			if lastMatchData != nil {
+				b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
+			}
+		}
+
+		finalResponse := strings.Join(responses, "\n")
+
+		// Send the final response as a follow-up message
+		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: finalResponse,
+		})
+		if err != nil {
+			log.Printf("Error sending follow-up message: %v", err)
+		}
+	}()
 }
 
 // Remove one or more summoner(s) from the list of summoners tracked in the guild
@@ -105,34 +121,51 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
 	}
 
 	summonerNames := strings.Split(options[0].StringValue(), ",")
-	var responses []string
 
-	for _, summonerName := range summonerNames {
-		summonerName = strings.TrimSpace(strings.ToLower(summonerName))
-		guildID := i.GuildID
-
-		err := b.storage.RemoveSummoner(guildID, summonerName)
-		if err != nil {
-			if err == storage.ErrSummonerNotFound {
-				responses = append(responses, fmt.Sprintf("❌ Summoner '%s' was not found in the tracking list.", summonerName))
-			} else {
-				log.Printf("Error removing summoner '%s': %v", summonerName, err)
-				responses = append(responses, fmt.Sprintf("❌ An error occurred while removing '%s'. Please try again later.", summonerName))
-			}
-		} else {
-			responses = append(responses, fmt.Sprintf("✅ Summoner '%s' has been removed from tracking in this server.", summonerName))
-		}
-	}
-
-	// Join all responses into a single message
-	finalResponse := strings.Join(responses, "\n")
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	// Respond immediately to avoid timeout
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: finalResponse,
+			Content: "Removing summoner(s)...",
 		},
 	})
+	if err != nil {
+		log.Printf("Error responding to interaction: %v", err)
+		return
+	}
+
+	// Process summoners in a separate goroutine
+	go func() {
+		var responses []string
+		guildID := i.GuildID
+
+		for _, summonerName := range summonerNames {
+			summonerName = strings.TrimSpace(strings.ToLower(summonerName))
+
+			err := b.storage.RemoveSummoner(guildID, summonerName)
+			if err != nil {
+				if err == storage.ErrSummonerNotFound {
+					responses = append(responses, fmt.Sprintf("❌ Summoner '%s' was not found in the tracking list.", summonerName))
+				} else {
+					log.Printf("Error removing summoner '%s': %v", summonerName, err)
+					responses = append(responses, fmt.Sprintf("❌ An error occurred while removing '%s'. Please try again later.", summonerName))
+				}
+			} else {
+				responses = append(responses, fmt.Sprintf("✅ Summoner '%s' has been removed from tracking in this server.", summonerName))
+			}
+		}
+
+		// Join all responses into a single message
+		finalResponse := strings.Join(responses, "\n")
+
+		// Send the final response as a follow-up message
+		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: finalResponse,
+		})
+		if err != nil {
+			log.Printf("Error sending follow-up message: %v", err)
+		}
+	}()
 }
 
 // handleReset removes all summoners followed within the guild
