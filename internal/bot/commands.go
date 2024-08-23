@@ -16,7 +16,7 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 		b.handleAdd(s, i)
 	case "remove":
 		b.handleRemove(s, i)
-	case "resetfollowing":
+	case "reset":
 		b.handleReset(s, i)
 	case "list":
 		b.handleList(s, i)
