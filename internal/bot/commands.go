@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
 	"github.com/tristan-derez/league-tracker/internal/storage"
 	"github.com/tristan-derez/league-tracker/internal/utils"
 )
 
+// handleInteraction is a method of the Bot struct that handles Discord interactions
 func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.ApplicationCommandData().Name {
 	case "add":
@@ -22,12 +24,11 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 		b.handleList(s, i)
 	case "unchannel":
 		b.handleUnchannel(s, i)
-	case "ping":
-		b.handlePing(s, i)
 	}
 }
 
-// add one or more users
+// handleAdd processes the "add" command for the Discord bot.
+// It adds one or more summoners to the bot's tracking system.
 func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
@@ -37,7 +38,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	summonerNames := strings.Split(options[0].StringValue(), ",")
 
-	// Respond immediately to avoid timeout
+	// Respond immediately to avoid Discord interaction timeout
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -49,6 +50,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
+	// Process summoners asynchronously
 	go func() {
 		var responses []string
 
@@ -66,11 +68,15 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
 			if err != nil {
-				if strings.Contains(err.Error(), "rate limit exceeded") {
+				if riotapi.IsRateLimitError(err) {
 					responses = append(responses, "⚠️ Rate limit exceeded. Please try again later.")
-					break // Stop processing further summoners
+					break
 				}
-				responses = append(responses, fmt.Sprintf("❌ Unable to find '%s'.", summonerName))
+				if apiErr, ok := err.(*riotapi.RiotAPIError); ok {
+					responses = append(responses, fmt.Sprintf("❌ Error finding '%s': %s", summonerName, apiErr.Message))
+				} else {
+					responses = append(responses, fmt.Sprintf("❌ Unable to find '%s': %v", summonerName, err))
+				}
 				continue
 			}
 
@@ -100,7 +106,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 		}
 
-		finalResponse := strings.Join(responses, "\n")
+		finalResponse := strings.Join(responses, "\n\n")
 
 		// Send the final response as a follow-up message
 		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
@@ -112,7 +118,8 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}()
 }
 
-// Remove one or more summoner(s) from the list of summoners tracked in the guild
+// handleRemove processes the /remove command for the Discord bot.
+// It removes one or more summoners from the bot's tracking system.
 func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
 	if len(options) == 0 {
@@ -168,7 +175,8 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
 	}()
 }
 
-// handleReset removes all summoners followed within the guild
+// handleReset processes the /reset command for the Discord bot.
+// It removes every summoners from the bot's tracking system.
 func (b *Bot) handleReset(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Respond immediately to avoid timeout
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -196,6 +204,7 @@ func (b *Bot) handleReset(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	sendFollowUpMessage(s, i, "All summoners have been removed from tracking in this server.")
 }
 
+// sendFollowUpMessage sends a follow-up message to a Discord interaction
 func sendFollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
 	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Content: content,
@@ -205,7 +214,8 @@ func sendFollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, c
 	}
 }
 
-// List all summoners from a guild with their respective ranks
+// handleList processes the /list command for the Discord bot.
+// It display every summoners followed in the server.
 func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	guildID := i.GuildID
 
@@ -220,10 +230,12 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if len(summoners) == 0 {
 		content = "No summoners are currently being tracked in this server."
 	} else {
+		// Format the list of summoners with their ranks and LP
 		for _, summoner := range summoners {
 			if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
 				content += fmt.Sprintf("- %s (Unranked)\n", summoner.Name)
 			} else {
+				// Format the tier, rank and lp string
 				words := strings.Fields(summoner.Rank)
 				words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
 				formattedRank := strings.Join(words, " ")
@@ -240,16 +252,9 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 }
 
-func (b *Bot) handlePing(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "pong!",
-		},
-	})
-}
-
-// Remove channel_id from guild table to let user select a new one
+// handleUnchannel processes the /unchannel command for the Discord bot.
+// It removes the associated channel from the guild
+// (where the bot display new matches from summoners).
 func (b *Bot) handleUnchannel(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	err := b.storage.RemoveChannelFromGuild(i.GuildID, i.ChannelID)
 	if err != nil {
@@ -266,7 +271,7 @@ func (b *Bot) handleUnchannel(s *discordgo.Session, i *discordgo.InteractionCrea
 	})
 }
 
-// generate an ephemeral error message that is only shown to the user that typed a command
+// respondWithError generates an ephemeral error message that is only shown to the user that typed a command
 func respondWithError(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
