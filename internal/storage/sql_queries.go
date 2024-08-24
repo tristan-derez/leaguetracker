@@ -22,7 +22,7 @@ const (
         name = EXCLUDED.name,
         summoner_level = EXCLUDED.summoner_level,
         profile_icon_id = EXCLUDED.profile_icon_id,
-        revision_date = EXCLUDED.revision_date
+        revision_date = EXCLUDED.revision_date,
         updated_at = CURRENT_TIMESTAMP 
     RETURNING id
     `
