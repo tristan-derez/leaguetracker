@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS summoners (
     id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     riot_account_id TEXT,
-    riot_summoner_id TEXT,
+    riot_summoner_id TEXT UNIQUE NOT NULL,
     riot_summoner_puuid TEXT,
     summoner_level BIGINT,
     profile_icon_id INTEGER,
