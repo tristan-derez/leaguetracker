@@ -44,7 +44,7 @@ const (
         hot_streak = EXCLUDED.hot_streak,
         veteran = EXCLUDED.veteran,
         fresh_blood = EXCLUDED.fresh_blood,
-        inactive = EXCLUDED.inactive
+        inactive = EXCLUDED.inactive,
         updated_at = CURRENT_TIMESTAMP
     `
 
