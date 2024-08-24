@@ -114,6 +114,7 @@ const (
     WHERE guild_id = $1 AND channel_id = $2
     `
 
+	// select every summoners associated to guild
 	selectAllSummonersForAGuildSQL SQLQuery = `
     SELECT s.riot_summoner_puuid, s.name, s.riot_summoner_id
     FROM summoners s
@@ -121,6 +122,7 @@ const (
     WHERE gsa.guild_id = $1
     `
 
+	// update the channel id of a guild
 	updateGuildWithChannelIDSQL SQLQuery = `
     UPDATE guilds
     SET channel_id = $2, updated_at = CURRENT_TIMESTAMP
@@ -158,12 +160,6 @@ const (
 	insertLPInLPHistorySQL SQLQuery = `
     INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
     VALUES ($1, $2, $3, $4)
-    `
-
-	// update lp in lp_history with a riot summoner id
-	insertLPHistoryByRiotIDSQL SQLQuery = `
-    INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
-    VALUES ((SELECT id FROM summoners WHERE riot_summoner_id = $1), $2, $3, $4)
     `
 
 	// get rank from league entries

@@ -8,65 +8,69 @@ import (
 )
 
 type Config struct {
-    DiscordToken  string
-    RiotAPIKey    string
-    RiotAPIRegion string
-    DBHost        string
-    DBPort        string
-    DBUsername    string
-    DBPassword    string
-    DBDatabase    string
-    DBSchema      string
+	DiscordToken  string
+	RiotAPIKey    string
+	RiotAPIRegion string
+	DBHost        string
+	DBPort        string
+	DBUsername    string
+	DBPassword    string
+	DBDatabase    string
+	DBSchema      string
 }
 
+// Load reads environment variables from a .env file and populates a Config struct.
+// It returns a pointer to the populated Config and any error encountered during the process.
 func Load() (*Config, error) {
-    if err := godotenv.Load(); err != nil {
-        return nil, fmt.Errorf("error loading .env file: %w", err)
-    }
+	if err := godotenv.Load(); err != nil {
+		return nil, fmt.Errorf("error loading .env file: %w", err)
+	}
 
-    config := &Config{
-        DiscordToken: os.Getenv("DISCORD_TOKEN"),
-        RiotAPIKey: os.Getenv("RIOT_API"),
-        RiotAPIRegion: os.Getenv("RIOT_REGION"),
-        DBHost:       os.Getenv("DB_HOST"),
-        DBPort:       os.Getenv("DB_PORT"),
-        DBUsername:       os.Getenv("DB_USERNAME"),
-        DBPassword:   os.Getenv("DB_PASSWORD"),
-        DBDatabase:       os.Getenv("DB_DATABASE"),
-        DBSchema:     os.Getenv("DB_SCHEMA"),
-    }
+	config := &Config{
+		DiscordToken:  os.Getenv("DISCORD_TOKEN"),
+		RiotAPIKey:    os.Getenv("RIOT_API"),
+		RiotAPIRegion: os.Getenv("RIOT_REGION"),
+		DBHost:        os.Getenv("DB_HOST"),
+		DBPort:        os.Getenv("DB_PORT"),
+		DBUsername:    os.Getenv("DB_USERNAME"),
+		DBPassword:    os.Getenv("DB_PASSWORD"),
+		DBDatabase:    os.Getenv("DB_DATABASE"),
+		DBSchema:      os.Getenv("DB_SCHEMA"),
+	}
 
-    if err := config.validate(); err != nil {
-        return nil, err
-    }
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
 
-    return config, nil
+	return config, nil
 }
 
+// validate checks if all required environment variables are set.
+// It returns an error if any required variable is missing.
 func (c *Config) validate() error {
-    requiredVars := map[string]*string{
-        "DISCORD_TOKEN": &c.DiscordToken,
-        "RIOT_API":      &c.RiotAPIKey,
-        "RIOT_REGION":   &c.RiotAPIRegion,
-        "DB_HOST":       &c.DBHost,
-        "DB_PORT":       &c.DBPort,
-        "DB_USERNAME":   &c.DBUsername,
-        "DB_PASSWORD":   &c.DBPassword,
-        "DB_DATABASE":   &c.DBDatabase,
-        "DB_SCHEMA":     &c.DBSchema,
-    }
+	requiredVars := map[string]*string{
+		"DISCORD_TOKEN": &c.DiscordToken,
+		"RIOT_API":      &c.RiotAPIKey,
+		"RIOT_REGION":   &c.RiotAPIRegion,
+		"DB_HOST":       &c.DBHost,
+		"DB_PORT":       &c.DBPort,
+		"DB_USERNAME":   &c.DBUsername,
+		"DB_PASSWORD":   &c.DBPassword,
+		"DB_DATABASE":   &c.DBDatabase,
+		"DB_SCHEMA":     &c.DBSchema,
+	}
 
-    var missingVars []string
+	var missingVars []string
 
-    for envVar, value := range requiredVars {
-        if *value == "" {
-            missingVars = append(missingVars, envVar)
-        }
-    }
+	for envVar, value := range requiredVars {
+		if *value == "" {
+			missingVars = append(missingVars, envVar)
+		}
+	}
 
-    if len(missingVars) > 0 {
-        return fmt.Errorf("missing required environment variables: %v", missingVars)
-    }
+	if len(missingVars) > 0 {
+		return fmt.Errorf("missing required environment variables: %v", missingVars)
+	}
 
-    return nil
+	return nil
 }

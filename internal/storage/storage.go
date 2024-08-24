@@ -18,11 +18,12 @@ import (
 //go:embed sql/init_db.sql
 var initDBSQL string
 
+// Storage represents a database connection and provides methods for data operations.
 type Storage struct {
 	db *sql.DB
 }
 
-// New creates and initializes a new Storage instance connected to the specified PostgreSQL database
+// New creates and initializes a new Storage instance connected to the specified PostgreSQL database.
 func New(config *config.Config) (*Storage, error) {
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		config.DBHost, config.DBPort, config.DBUsername, config.DBPassword, config.DBDatabase)
@@ -40,6 +41,7 @@ func New(config *config.Config) (*Storage, error) {
 	return storage, nil
 }
 
+// initDB initializes the database by executing the SQL query in initDBSQL.
 func (s *Storage) initDB() error {
 	_, err := s.db.Exec(initDBSQL)
 	if err != nil {
@@ -56,7 +58,13 @@ func (s *Storage) AddGuild(guildID, guildName string) error {
 	return err
 }
 
-// AddSummoner adds or updates a summoner's information, their league entry if available, and associates them with a guild in the database.
+// Close closes the database connection.
+func (s *Storage) Close() error {
+	return s.db.Close()
+}
+
+// AddSummoner adds or updates a summoner's information, their league entry if available,
+// and associates them with a guild in the database.
 func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner riotapi.Summoner, leagueEntry *riotapi.LeagueEntry) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -103,7 +111,7 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 // ErrSummonerNotFound is returned when a summoner is not found in the database
 var ErrSummonerNotFound = errors.New("summoner not found")
 
-// RemoveSummoner removes one or more summoner(s) from the database, but only the summoner associated to a guild.
+// RemoveSummoner removes one or more summoner(s) associated with a guild from the database.
 func (s *Storage) RemoveSummoner(guildID, summonerName string) error {
 	result, err := s.db.Exec(string(deleteSummonerSQL), guildID, summonerName)
 	if err != nil {
@@ -131,7 +139,8 @@ func (s *Storage) RemoveAllSummoners(guildID string) error {
 	return nil
 }
 
-// AddMatch adds a new match record to the database for a given summoner and also update lp_history and league_entry
+// AddMatchAndGetLPChange adds a new match record to the database for a given summoner,
+// updates lp_history and league_entry, and returns the LP change.
 func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riotapi.MatchData, newLP int, newRank, newTier string) (int, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -158,7 +167,6 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	}
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
-	log.Printf("Debug: Calculated LP Change: %d", lpChange)
 
 	err = s.updateLPHistory(summonerID, matchData.MatchID, lpChange, newLP)
 	if err != nil {
@@ -178,6 +186,7 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	return lpChange, nil
 }
 
+// insertMatchData inserts match data for a summoner into the database.
 func (s *Storage) insertMatchData(summonerID int, matchData *riotapi.MatchData) error {
 	_, err := s.db.Exec(string(insertMatchDataSQL), summonerID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
 		matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID, matchData.QueueID,
@@ -192,6 +201,7 @@ func (s *Storage) insertMatchData(summonerID int, matchData *riotapi.MatchData) 
 	return nil
 }
 
+// updateLPHistory updates the LP history for a summoner in the database.
 func (s *Storage) updateLPHistory(summonerID int, matchID string, lpChange, newLP int) error {
 	_, err := s.db.Exec(string(insertLPInLPHistorySQL), summonerID, matchID, lpChange, newLP)
 	if err != nil {
@@ -200,14 +210,7 @@ func (s *Storage) updateLPHistory(summonerID int, matchID string, lpChange, newL
 	return nil
 }
 
-func (s *Storage) UpdateLPHistoryByRiotID(riotSummonerID, matchID string, lpChange, newLP int) error {
-	_, err := s.db.Exec(string(insertLPHistoryByRiotIDSQL), riotSummonerID, matchID, lpChange, newLP)
-	if err != nil {
-		return fmt.Errorf("error updating LP history by Riot ID: %w", err)
-	}
-	return nil
-}
-
+// updateLeagueEntry updates lp, tier and rank in league_entries for a summoner in the database.
 func (s *Storage) updateLeagueEntry(summonerID int, newLP int, newTier, newRank string) error {
 	_, err := s.db.Exec(string(updateLeagueEntriesSQL), newLP, newTier, newRank, summonerID)
 	if err != nil {
@@ -216,10 +219,8 @@ func (s *Storage) updateLeagueEntry(summonerID int, newLP int, newTier, newRank 
 	return nil
 }
 
+// returns the lp change based on previous and new tier, rank and lp
 func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, oldLP, newLP int) int {
-	log.Printf("Debug: CalculateLPChange input - oldTier: %s, newTier: %s, oldRank: %s, newRank: %s, oldLP: %d, newLP: %d",
-		oldTier, newTier, oldRank, newRank, oldLP, newLP)
-
 	oldTier = strings.ToUpper(oldTier)
 	newTier = strings.ToUpper(newTier)
 
@@ -232,39 +233,32 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 	oldDivision := utils.GetRankValue(oldRank)
 	newDivision := utils.GetRankValue(newRank)
 
-	log.Printf("Debug: Division values - oldDivision: %d, newDivision: %d", oldDivision, newDivision)
-
 	var lpChange int
 	if oldTier != newTier {
 		if tierOrder[newTier] > tierOrder[oldTier] {
 			// Promotion to a new tier
 			lpChange = (100 - oldLP) + newLP
-			log.Printf("Debug: Promotion to new tier. LP Change: %d", lpChange)
 		} else {
 			// Demotion to a lower tier
 			lpChange = -(oldLP) - (100 - newLP)
-			log.Printf("Debug: Demotion to lower tier. LP Change: %d", lpChange)
 		}
 	} else if oldDivision != newDivision {
 		if newDivision > oldDivision {
 			// Promotion within the same tier
 			lpChange = (100 - oldLP) + newLP
-			log.Printf("Debug: Promotion within tier. LP Change: %d", lpChange)
 		} else {
 			// Demotion within the same tier
 			lpChange = -(oldLP) - (100 - newLP)
-			log.Printf("Debug: Demotion within tier. LP Change: %d", lpChange)
 		}
 	} else {
 		// Same division, normal LP change
 		lpChange = newLP - oldLP
-		log.Printf("Debug: Same division, normal LP change. LP Change: %d", lpChange)
 	}
 
 	return lpChange
 }
 
-// ListSummoners retrieves and returns a list of summoners with their ranks for a given guild ID.
+// ListSummoners retrieves and returns a list of summoners with their ranks for a given guild id.
 func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
 	rows, err := s.db.Query(string(selectSummonerWithRankSQL), guildID)
 	if err != nil {
@@ -286,10 +280,6 @@ func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
 	}
 
 	return summoners, rows.Err()
-}
-
-func (s *Storage) Close() error {
-	return s.db.Close()
 }
 
 // GetGuildChannelID retrieves the channel ID associated with a given guild ID.
@@ -331,7 +321,7 @@ func (s *Storage) RemoveChannelFromGuild(guildID, channelID string) error {
 	return nil
 }
 
-// GetAllSummonersForGuild retrieve and returns summoners in a guild list in the database.
+// GetAllSummonersForGuild retrieves and returns summoners in a guild list in the database.
 func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, error) {
 	rows, err := s.db.Query(string(selectAllSummonersForAGuildSQL), guildID)
 	if err != nil {
@@ -351,7 +341,7 @@ func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, e
 	return summoners, rows.Err()
 }
 
-// UpdateLPHistory updates the LP for a summoner in the lp_history table
+// UpdateLPHistory updates the LP for a summoner in the lp_history table.
 func (s *Storage) UpdateLPHistory(riotSummonerID, matchID string, lpChange, newLP int) error {
 	_, err := s.db.Exec(string(insertLPInLPHistorySQL), riotSummonerID, matchID, lpChange, newLP)
 	if err != nil {
@@ -360,6 +350,7 @@ func (s *Storage) UpdateLPHistory(riotSummonerID, matchID string, lpChange, newL
 	return nil
 }
 
+// GetLastKnownLP retrieves last lp stored in league entries.
 func (s *Storage) GetLastKnownLP(summonerID int) (int, error) {
 	var previousLP int
 	err := s.db.QueryRow(string(selectLeaguePointsFromLeagueEntriesSQL), summonerID).Scan(&previousLP)
@@ -373,6 +364,7 @@ func (s *Storage) GetLastKnownLP(summonerID int) (int, error) {
 	return previousLP, nil
 }
 
+// GetSummonerIDFromRiotID retrives id of a summoner from riot_summoner_id.
 func (s *Storage) GetSummonerIDFromRiotID(riotSummonerID string) (int, error) {
 	var summonerID int
 	err := s.db.QueryRow("SELECT id FROM summoners WHERE riot_summoner_id = $1", riotSummonerID).Scan(&summonerID)
@@ -382,7 +374,8 @@ func (s *Storage) GetSummonerIDFromRiotID(riotSummonerID string) (int, error) {
 	return summonerID, nil
 }
 
-// Retrieves PreviousRank from LeagueEntries using summonerID, to be used before updating entries
+// GetRankBySummonerId retrieves the rank from leagueEntries using the summoner ID.
+// This should be called before updating entries.
 func (s *Storage) GetPreviousRank(summonerID int) (*PreviousRank, error) {
 	var prevRank PreviousRank
 	err := s.db.QueryRow(string(selectRankInLeagueEntriesSQL), summonerID).Scan(&prevRank.PrevTier, &prevRank.PrevRank, &prevRank.PrevLP)

@@ -17,6 +17,8 @@ type Client struct {
 	rateLimiter *RateLimiter
 }
 
+// NewClient creates and returns a new Client instance for interacting with the Riot API.
+// It initializes the client with the provided API key and region, and sets up a rate limiter.
 func NewClient(apiKey, region string) *Client {
 	return &Client{
 		apiKey: apiKey,
@@ -28,6 +30,8 @@ func NewClient(apiKey, region string) *Client {
 	}
 }
 
+// GetAccountPUUIDBySummonerName fetch the puuid of a summoner with the gameName and tagLine.
+//   - gameName#tagLine
 func (c *Client) GetAccountPUUIDBySummonerName(gameName, tagLine string) (*Account, error) {
 	encodedName := url.PathEscape(gameName)
 	encodedTag := url.PathEscape(tagLine)
@@ -47,6 +51,7 @@ func (c *Client) GetAccountPUUIDBySummonerName(gameName, tagLine string) (*Accou
 	return &account, nil
 }
 
+// GetSummonerByPUUID fetch summoner data by their puuid.
 func (c *Client) GetSummonerByPUUID(puuid string) (*Summoner, error) {
 	url := fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/%s", c.region, puuid)
 
@@ -64,9 +69,9 @@ func (c *Client) GetSummonerByPUUID(puuid string) (*Summoner, error) {
 	return &summoner, nil
 }
 
-// Get summoner current tier and rank from RIOT API
-func (c *Client) GetSummonerRank(summonerID string) (*LeagueEntry, error) {
-	url := fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v4/entries/by-summoner/%s", c.region, summonerID)
+// GetSummonerRank fetch summoner current tier and rank from Riot API.
+func (c *Client) GetSummonerRank(RiotSummonerID string) (*LeagueEntry, error) {
+	url := fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v4/entries/by-summoner/%s", c.region, RiotSummonerID)
 
 	resp, err := c.makeRequest(url)
 	if err != nil {
@@ -93,10 +98,10 @@ func (c *Client) GetSummonerRank(summonerID string) (*LeagueEntry, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no solo queue entry found for summoner ID %s", summonerID)
+	return nil, fmt.Errorf("no solo queue entry found for summoner ID %s", RiotSummonerID)
 }
 
-// Get summoner match data using the matchID, summonerPUUID is used to find participant
+// GetMatchData fetch summoner match data using the matchID, summonerPUUID is used to find participant.
 func (c *Client) GetMatchData(matchID string, summonerPUUID string) (*MatchData, error) {
 	url := fmt.Sprintf("https://europe.api.riotgames.com/lol/match/v5/matches/%s", matchID)
 
@@ -119,6 +124,8 @@ func (c *Client) GetMatchData(matchID string, summonerPUUID string) (*MatchData,
 	return createMatchData(matchID, matchResp.Info, *participant), nil
 }
 
+// findParticipant searches for a participant in a match by their PUUID.
+// It returns a pointer to the participant if found, or an error if not found.
 func findParticipant(participants []participant, summonerPUUID string) (*participant, error) {
 	for _, p := range participants {
 		if p.Puuid == summonerPUUID {
@@ -128,6 +135,8 @@ func findParticipant(participants []participant, summonerPUUID string) (*partici
 	return nil, fmt.Errorf("summoner not found in match data")
 }
 
+// createMatchData constructs a MatchData struct from the given match information and participant data.
+// It takes the matchID, general match info, and specific participant data as input.
 func createMatchData(matchID string, info matchInfo, participant participant) *MatchData {
 	result := "Loss"
 	if participant.Win {
@@ -161,6 +170,7 @@ func createMatchData(matchID string, info matchInfo, participant participant) *M
 	}
 }
 
+// GetRankedSoloMatchIDs retrieves last game(s) id(s) from a summoner.
 func (c *Client) GetRankedSoloMatchIDs(puuid string, count int) ([]string, error) {
 	url := fmt.Sprintf("https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids?queue=420&count=%d", puuid, count)
 
@@ -183,6 +193,9 @@ func (c *Client) GetRankedSoloMatchIDs(puuid string, count int) ([]string, error
 	return matchIDs, nil
 }
 
+// GetLastRankedSoloMatchData fetch the last match of a summoner
+// by fetching the last ranked game with summonerPUUID,
+// and returns the match data.
 func (c *Client) GetLastRankedSoloMatchData(summonerPUUID string) (*MatchData, error) {
 	matchIDs, err := c.GetRankedSoloMatchIDs(summonerPUUID, 1)
 	if err != nil {
@@ -227,6 +240,7 @@ func (c *Client) GetNewMatchForSummoner(summonerPUUID string, lastKnownMatchID s
 	return true, matchData, nil
 }
 
+// GetCurrentDDragonVersion fetch the current version of DDragon Version.
 func (c *Client) GetCurrentDDragonVersion() (string, error) {
 	const defaultVersion string = "14.15.1"
 	url := "https://ddragon.leagueoflegends.com/api/versions.json"
