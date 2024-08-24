@@ -83,24 +83,34 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
 			if err != nil {
 				responses = append(responses, fmt.Sprintf("❌ Error fetching details for '%s'.", summonerName))
+				log.Printf("❌ Error fetching details for '%s': %v", summonerName, err)
 				continue
 			}
 
 			rankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
 			if err != nil {
 				responses = append(responses, fmt.Sprintf("❌ Error fetching rank for '%s'.", summonerName))
+				log.Printf("Error fetching rank for '%s': %v", summonerName, err)
 				continue
 			}
 
 			if err := b.storage.AddSummoner(i.GuildID, i.ChannelID, summonerName, *summoner, rankInfo); err != nil {
 				responses = append(responses, fmt.Sprintf("❌ Error adding '%s' to database.", summonerName))
+				log.Printf("Error adding summoner '%s' to database: %v", summonerName, err)
 				continue
 			}
 
 			responses = append(responses, fmt.Sprintf("✅ '%s' (Level %d) added. Rank: %s %s %d LP",
 				summonerName, summoner.SummonerLevel, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
 
-			lastMatchData, _ := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
+			// here we just log the error because not finding match could happen at start of season
+			// or just because the player didnt play for a long time
+			lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
+			if err != nil {
+				log.Printf("Error fetching last ranked solo match data for PUUID %s: %v", account.SummonerPUUID, err)
+				continue
+			}
+
 			if lastMatchData != nil {
 				b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
 			}
