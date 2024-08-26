@@ -175,4 +175,67 @@ const (
     DELETE FROM guild_summoner_associations
     WHERE guild_id = $1
 	`
+
+	// Get daily progress for summoners in a guild for the previous day
+	getDailySummonerProgressSQL SQLQuery = `
+    WITH target_date AS (
+        SELECT (CURRENT_DATE AT TIME ZONE 'UTC' - INTERVAL '1 day')::DATE AS date
+    ),
+    daily_progress AS (
+        SELECT 
+            s.id AS summoner_id,
+            s.name,
+            lh.tier,
+            lh.rank,
+            lh.new_lp,
+            lh.lp_change,
+            lh.timestamp,
+            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp DESC) AS rn_latest,
+            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp ASC) AS rn_earliest
+        FROM 
+            summoners s
+        JOIN 
+            guild_summoner_associations gsa ON s.id = gsa.summoner_id
+        JOIN 
+            lp_history lh ON s.id = lh.summoner_id
+        CROSS JOIN
+            target_date td
+        WHERE 
+            gsa.guild_id = $1
+            AND lh.timestamp >= td.date
+            AND lh.timestamp < td.date + INTERVAL '1 day'
+    ),
+    summoner_stats AS (
+        SELECT
+            summoner_id,
+            SUM(CASE WHEN lp_change > 0 THEN 1 ELSE 0 END) AS wins,
+            SUM(CASE WHEN lp_change < 0 THEN 1 ELSE 0 END) AS losses
+        FROM
+            daily_progress
+        GROUP BY
+            summoner_id
+    )
+    SELECT 
+        dp_latest.name,
+        dp_latest.tier AS current_tier,
+        dp_latest.rank AS current_rank,
+        dp_latest.new_lp AS current_lp,
+        dp_earliest.tier AS previous_tier,
+        dp_earliest.rank AS previous_rank,
+        dp_earliest.new_lp AS previous_lp,
+        COALESCE(ss.wins, 0) AS wins,
+        COALESCE(ss.losses, 0) AS losses
+    FROM 
+        daily_progress dp_latest
+    JOIN 
+        daily_progress dp_earliest ON dp_latest.summoner_id = dp_earliest.summoner_id
+    LEFT JOIN
+        summoner_stats ss ON dp_latest.summoner_id = ss.summoner_id
+    WHERE 
+        dp_latest.rn_latest = 1
+        AND dp_earliest.rn_earliest = 1
+        AND (dp_latest.new_lp != dp_earliest.new_lp OR dp_latest.tier != dp_earliest.tier OR dp_latest.rank != dp_earliest.rank)
+    ORDER BY 
+        (dp_latest.new_lp - dp_earliest.new_lp) DESC
+    `
 )

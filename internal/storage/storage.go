@@ -384,6 +384,70 @@ func (s *Storage) GetPreviousRank(summonerID int) (*PreviousRank, error) {
 	return &prevRank, nil
 }
 
+// GetDailySummonerProgress fetches the daily summoner progress for a guild from the database.
+func (s *Storage) GetDailySummonerProgress(guildID string) ([]DailySummonerProgress, error) {
+	rows, err := s.db.Query(string(getDailySummonerProgressSQL), guildID)
+	if err != nil {
+		return nil, fmt.Errorf("error querying daily summoner progress: %w", err)
+	}
+	defer rows.Close()
+
+	var progress []DailySummonerProgress
+	for rows.Next() {
+		var p DailySummonerProgress
+		err := rows.Scan(
+			&p.Name, &p.CurrentTier, &p.CurrentRank, &p.CurrentLP,
+			&p.PreviousTier, &p.PreviousRank, &p.PreviousLP,
+			&p.Wins, &p.Losses,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning daily summoner progress: %w", err)
+		}
+		progress = append(progress, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating daily summoner progress rows: %w", err)
+	}
+
+	return progress, nil
+}
+
+// GetAllGuilds retrieves all guilds from the database.
+func (s *Storage) GetAllGuilds() ([]Guild, error) {
+	query := `
+        SELECT guild_id, guild_name, channel_id
+        FROM guilds
+    `
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error querying guilds: %w", err)
+	}
+	defer rows.Close()
+
+	var guilds []Guild
+	for rows.Next() {
+		var g Guild
+		if err := rows.Scan(&g.ID, &g.Name, &g.ChannelID); err != nil {
+			return nil, fmt.Errorf("error scanning guild row: %w", err)
+		}
+		guilds = append(guilds, g)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating guild rows: %w", err)
+	}
+
+	return guilds, nil
+}
+
+type Guild struct {
+	ID        string
+	Name      string
+	ChannelID string
+}
+
 type PreviousRank struct {
 	PrevTier string
 	PrevRank string
@@ -393,6 +457,18 @@ type PreviousRank struct {
 type LPChange struct {
 	Timestamp time.Time
 	NewLP     int
+}
+
+type DailySummonerProgress struct {
+	Name         string
+	CurrentTier  string
+	CurrentRank  string
+	CurrentLP    int
+	PreviousTier string
+	PreviousRank string
+	PreviousLP   int
+	Wins         int
+	Losses       int
 }
 
 var tierOrder = map[string]int{
