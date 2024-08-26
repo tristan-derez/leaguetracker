@@ -38,7 +38,7 @@ func (b *Bot) TrackMatches(guildID string) error {
 			continue // no summoner in guild
 		}
 
-		log.Printf("🕵️ Tracking summoners in guild id: %v", guildName)
+		log.Printf("🕵️ Tracking summoners in guild: %v", guildName)
 
 		for _, summoner := range summoners {
 			if !trackedSummoners[summoner.SummonerPUUID] {
@@ -163,7 +163,7 @@ func (b *Bot) performSummonerMatchCheck(guildID string, summoner riotapi.Summone
 		log.Printf("Error announcing new match for %s: %v", summoner.Name, err)
 	}
 
-	log.Printf("New match processed for %s in guild id: %v", summoner.Name, guildName)
+	log.Printf("New match processed for %s in guild: %v", summoner.Name, guildName)
 	return true, nil
 }
 
