@@ -160,7 +160,7 @@ const (
 	// we store the tier and rank for a better tracking of progress
 	insertLDataInLPHistorySQL SQLQuery = `
     INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp, tier, rank)
-    VALUES ($1, $2, $3, $4, $5, 6)
+    VALUES ($1, $2, $3, $4, $5, $6)
     `
 
 	// get rank from league entries
