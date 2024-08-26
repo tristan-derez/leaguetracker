@@ -109,7 +109,7 @@ const (
 
 	// remove the attributed channel for updates from guild
 	removeChannelFromGuildSQL SQLQuery = `
-    UPDATE guild_summoner_associations
+    UPDATE guilds
     SET channel_id = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE guild_id = $1 AND channel_id = $2
     `
