@@ -168,7 +168,7 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
 
-	err = s.updateLPHistory(summonerID, matchData.MatchID, lpChange, newLP)
+	err = s.createNewRowInLPHistory(summonerID, matchData.MatchID, lpChange, newLP, newTier, newRank)
 	if err != nil {
 		return 0, err
 	}
@@ -201,9 +201,11 @@ func (s *Storage) insertMatchData(summonerID int, matchData *riotapi.MatchData) 
 	return nil
 }
 
-// updateLPHistory updates the LP history for a summoner in the database.
-func (s *Storage) updateLPHistory(summonerID int, matchID string, lpChange, newLP int) error {
-	_, err := s.db.Exec(string(insertLPInLPHistorySQL), summonerID, matchID, lpChange, newLP)
+// createNewRowInLPHistory inserts a new record into the lp_history table for a summoner.
+// It captures the LP change, new LP total, tier, and rank for a specific match,
+// enabling detailed tracking of a summoner's rank progression over time.
+func (s *Storage) createNewRowInLPHistory(summonerID int, matchID string, lpChange, newLP int, tier, rank string) error {
+	_, err := s.db.Exec(string(insertLDataInLPHistorySQL), summonerID, matchID, lpChange, newLP, tier, rank)
 	if err != nil {
 		return fmt.Errorf("error inserting LP history: %w", err)
 	}
@@ -339,15 +341,6 @@ func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, e
 	}
 
 	return summoners, rows.Err()
-}
-
-// UpdateLPHistory updates the LP for a summoner in the lp_history table.
-func (s *Storage) UpdateLPHistory(riotSummonerID, matchID string, lpChange, newLP int) error {
-	_, err := s.db.Exec(string(insertLPInLPHistorySQL), riotSummonerID, matchID, lpChange, newLP)
-	if err != nil {
-		return fmt.Errorf("error updating LP history: %w", err)
-	}
-	return nil
 }
 
 // GetLastKnownLP retrieves last lp stored in league entries.

@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS lp_history (
     match_id TEXT NOT NULL,
     lp_change INTEGER NOT NULL,
     new_lp INTEGER NOT NULL,
+    tier STRING NOT NULL
+    rank STRING NOT NULL
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

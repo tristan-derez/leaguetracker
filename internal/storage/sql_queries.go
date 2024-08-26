@@ -156,10 +156,11 @@ const (
         AND queue_type = 'RANKED_SOLO_5x5'
     `
 
-	// update lp in lp_history with a summoner id
-	insertLPInLPHistorySQL SQLQuery = `
-    INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp)
-    VALUES ($1, $2, $3, $4)
+	// create a new row for lp, tier and rank in lp_history with a summoner id
+	// we store the tier and rank for a better tracking of progress
+	insertLDataInLPHistorySQL SQLQuery = `
+    INSERT INTO lp_history (summoner_id, match_id, lp_change, new_lp, tier, rank)
+    VALUES ($1, $2, $3, $4, $5, 6)
     `
 
 	// get rank from league entries
