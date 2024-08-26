@@ -102,6 +102,12 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) (b
 // It fetches the last known match, checks for new ones, updates the database,
 // and announces the new match in the guild's channel.
 func (b *Bot) performSummonerMatchCheck(guildID string, summoner riotapi.Summoner) (bool, error) {
+	guildName, err := b.storage.GetGuildName(guildID)
+	if err != nil {
+		log.Printf("Error fetching guild name for ID %s: %v", guildID, err)
+		guildName = "Unknown Guild" // Fallback name if we can't fetch the real name
+	}
+
 	storedMatchID, err := b.storage.GetLastMatchID(summoner.SummonerPUUID)
 	if err != nil {
 		log.Printf("Error getting stored match ID for %s: %v", summoner.Name, err)
@@ -157,7 +163,7 @@ func (b *Bot) performSummonerMatchCheck(guildID string, summoner riotapi.Summone
 		log.Printf("Error announcing new match for %s: %v", summoner.Name, err)
 	}
 
-	log.Printf("New match processed for %s in guild id: %v", summoner.Name, guildID)
+	log.Printf("New match processed for %s in guild id: %v", summoner.Name, guildName)
 	return true, nil
 }
 
