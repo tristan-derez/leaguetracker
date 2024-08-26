@@ -41,7 +41,7 @@ func (b *Bot) TrackMatches(guildID string) error {
 					for {
 						matchFound, err := b.trackSummonerMatches(guildID, s)
 						if err != nil {
-							log.Printf("Error tracking matches for summoner %s: %v", s.SummonerPUUID, err)
+							log.Printf("Error tracking matches for summoner %s: %v", s.Name, err)
 							time.Sleep(30 * time.Second)
 							continue
 						}
@@ -71,7 +71,6 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) (b
 	backoffStrategy.MaxElapsedTime = 30 * time.Second
 
 	var matchFound bool
-	var lastErr error
 
 	operation := func() error {
 		var err error
@@ -80,7 +79,6 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) (b
 			if riotapi.IsRateLimitError(err) {
 				return err // Retryable error
 			}
-			lastErr = err
 			return backoff.Permanent(err) // Non-retryable error
 		}
 		return nil // Success
@@ -88,10 +86,7 @@ func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) (b
 
 	err := backoff.Retry(operation, backoffStrategy)
 	if err != nil {
-		if lastErr != nil {
-			return false, fmt.Errorf("failed to track matches for %s: %v", summoner.Name, lastErr)
-		}
-		return false, fmt.Errorf("failed to track matches for %s after multiple retries: %v", summoner.Name, err)
+		return false, fmt.Errorf("failed to track matches for %s: %w", summoner.Name, err)
 	}
 
 	return matchFound, nil
