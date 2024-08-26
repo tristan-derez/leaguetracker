@@ -73,7 +73,8 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					break
 				}
 				if apiErr, ok := err.(*riotapi.RiotAPIError); ok {
-					responses = append(responses, fmt.Sprintf("❌ Error finding '%s': %s", summonerName, apiErr.Message))
+					responses = append(responses, fmt.Sprintf("❌ Error finding '%s'", summonerName))
+					log.Printf(apiErr.Message)
 				} else {
 					responses = append(responses, fmt.Sprintf("❌ Unable to find '%s': %v", summonerName, err))
 				}
