@@ -21,6 +21,12 @@ func (b *Bot) TrackMatches(guildID string) error {
 
 	trackedSummoners := make(map[string]bool)
 
+	guildName, err := b.storage.GetGuildName(guildID)
+	if err != nil {
+		log.Printf("Error fetching guild name for ID %s: %v", guildID, err)
+		guildName = "Unknown Guild" // Fallback name if we can't fetch the real name
+	}
+
 	for range ticker.C {
 		summoners, err := b.storage.GetAllSummonersForGuild(guildID)
 		if err != nil {
@@ -32,7 +38,7 @@ func (b *Bot) TrackMatches(guildID string) error {
 			continue // no summoner in guild
 		}
 
-		log.Printf("🕵️ Tracking summoners in guild id: %v", guildID)
+		log.Printf("🕵️ Tracking summoners in guild id: %v", guildName)
 
 		for _, summoner := range summoners {
 			if !trackedSummoners[summoner.SummonerPUUID] {

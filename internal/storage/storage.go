@@ -292,6 +292,18 @@ func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 	return channelID, err
 }
 
+func (s *Storage) GetGuildName(guildID string) (string, error) {
+	var guildName string
+	err := s.db.QueryRow("SELECT guild_name FROM guilds WHERE guild_id = $1", guildID).Scan(&guildName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("no guild found with ID %s", guildID)
+		}
+		return "", fmt.Errorf("error fetching guild name: %w", err)
+	}
+	return guildName, nil
+}
+
 // GetLastMatchID retrieves the most recent match ID for a given summoner PUUID.
 func (s *Storage) GetLastMatchID(puuid string) (string, error) {
 	var matchID string
