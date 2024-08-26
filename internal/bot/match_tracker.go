@@ -28,6 +28,10 @@ func (b *Bot) TrackMatches(guildID string) error {
 			continue
 		}
 
+		if len(summoners) == 0 {
+			continue // no summoner in guild
+		}
+
 		log.Printf("🕵️ Tracking summoners in guild id: %v", guildID)
 
 		for _, summoner := range summoners {
