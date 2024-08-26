@@ -156,6 +156,17 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 		return 0, fmt.Errorf("error fetching summoner ID: %w", err)
 	}
 
+	// Check if this match has already been processed for this summoner
+	lastLPChange, lastMatchID, err := s.getLastLPHistory(summonerID)
+	if err != nil {
+		return 0, fmt.Errorf("error checking last LP history: %w", err)
+	}
+
+	if lastMatchID == matchData.MatchID {
+		// Match already processed, return stored LP change
+		return lastLPChange, nil
+	}
+
 	err = s.insertMatchData(summonerID, matchData)
 	if err != nil {
 		return 0, err
@@ -258,6 +269,22 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 	}
 
 	return lpChange
+}
+
+// getLastLPHistory retrieves the last LP change and match ID from the lp_history table for a given summoner
+func (s *Storage) getLastLPHistory(summonerID int) (int, string, error) {
+	var lpChange int
+	var matchID string
+	err := s.db.QueryRow(string(selectLastLPKnownSQL), summonerID).Scan(&lpChange, &matchID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, "", nil // No history found
+		}
+		return 0, "", err
+	}
+
+	return lpChange, matchID, nil
 }
 
 // ListSummoners retrieves and returns a list of summoners with their ranks for a given guild id.

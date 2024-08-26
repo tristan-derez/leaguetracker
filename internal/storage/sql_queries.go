@@ -238,4 +238,12 @@ const (
     ORDER BY 
         (dp_latest.new_lp - dp_earliest.new_lp) DESC
     `
+
+	selectLastLPKnownSQL SQLQuery = `
+    SELECT lp_change, match_id 
+    FROM lp_history 
+    WHERE summoner_id = $1 
+    ORDER BY timestamp DESC 
+    LIMIT 1
+    `
 )
