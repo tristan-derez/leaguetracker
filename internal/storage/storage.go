@@ -292,6 +292,7 @@ func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 	return channelID, err
 }
 
+// GetGuildName retrieves the name of a guild with a guildID
 func (s *Storage) GetGuildName(guildID string) (string, error) {
 	var guildName string
 	err := s.db.QueryRow("SELECT guild_name FROM guilds WHERE guild_id = $1", guildID).Scan(&guildName)

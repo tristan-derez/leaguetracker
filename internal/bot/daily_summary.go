@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/tristan-derez/league-tracker/internal/storage"
 	"github.com/tristan-derez/league-tracker/internal/utils"
 )
@@ -22,17 +23,20 @@ func (b *Bot) PublishDailySummary() {
 
 	for _, guild := range guilds {
 		log.Printf("Processing guild: %s", guild.ID)
+		guildName, err := b.storage.GetGuildName(guild.ID)
+		if err != nil {
+			log.Printf("Error getting guild's name: %v", err)
+		}
+
 		progress, err := b.storage.GetDailySummonerProgress(guild.ID)
 		if err != nil {
-			log.Printf("Error getting daily summoner progress for guild %s: %v", guild.ID, err)
+			log.Printf("Error getting daily summoner progress for guild %s: %v", guildName, err)
 			continue
 		}
 
 		if len(progress) == 0 {
-			log.Printf("No progress to report for guild %s", guild.ID)
 			continue
 		}
-		log.Printf("Found progress for %d summoners in guild %s", len(progress), guild.ID)
 
 		summary := b.formatDailySummary(progress)
 
@@ -41,22 +45,24 @@ func (b *Bot) PublishDailySummary() {
 			continue
 		}
 
-		_, err = b.session.ChannelMessageSend(guild.ChannelID, summary)
+		_, err = b.session.ChannelMessageSendEmbed(guild.ChannelID, summary)
 		if err != nil {
 			log.Printf("Error sending daily summary to guild %s: %v", guild.ID, err)
-		} else {
-			log.Printf("Successfully sent daily summary to guild %s", guild.ID)
 		}
 	}
 }
 
-func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) string {
-	var summary strings.Builder
-	summary.WriteString("**Daily Summary**\n\n")
+func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title:       "Daily Summary",
+		Description: "",
+		Color:       0x3498db,
+		Fields:      []*discordgo.MessageEmbedField{},
+	}
 
 	if len(progress) == 0 {
-		summary.WriteString("No summoner progress to report today 😔")
-		return summary.String()
+		embed.Description = "No summoner progress to report today 😔"
+		return embed
 	}
 
 	// Sort the progress slice by LP change (descending)
@@ -67,22 +73,34 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) strin
 	// Add best performer
 	best := progress[0]
 	bestLPChange := best.CurrentLP - best.PreviousLP
-	summary.WriteString(fmt.Sprintf("🏆 Happiest summoner: **%s** (%+d LP)\n", best.Name, bestLPChange))
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name:  "🏆 Happiest summoner",
+		Value: fmt.Sprintf("**%s** (%+d LP)", best.Name, bestLPChange),
+	})
 
 	// Add worst performer
 	worst := progress[len(progress)-1]
 	worstLPChange := worst.CurrentLP - worst.PreviousLP
-	summary.WriteString(fmt.Sprintf("😢 Saddest summoner: **%s** (%+d LP)\n\n", worst.Name, worstLPChange))
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name:  "😢 Saddest summoner",
+		Value: fmt.Sprintf("**%s** (%+d LP)", worst.Name, worstLPChange),
+	})
 
+	// Add individual summoner progress
 	for _, p := range progress {
 		lpChange := p.CurrentLP - p.PreviousLP
-		summary.WriteString(fmt.Sprintf("%s: %+d (%dW/%dL)\n", p.Name, lpChange, p.Wins, p.Losses))
-		summary.WriteString(fmt.Sprintf("%s %s - %d LP ➡️ %s %s - %d LP\n\n",
+		fieldValue := fmt.Sprintf("%+d LP (%dW/%dL)\n", lpChange, p.Wins, p.Losses)
+		fieldValue += fmt.Sprintf("```%s %s - %d LP ➡️ %s %s - %d LP```",
 			utils.CapitalizeFirst(strings.ToLower(p.PreviousTier)), p.PreviousRank, p.PreviousLP,
-			utils.CapitalizeFirst(strings.ToLower(p.CurrentTier)), p.CurrentRank, p.CurrentLP))
+			utils.CapitalizeFirst(strings.ToLower(p.CurrentTier)), p.CurrentRank, p.CurrentLP)
+
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  p.Name,
+			Value: fieldValue,
+		})
 	}
 
-	return summary.String()
+	return embed
 }
 
 func (b *Bot) runDailySummaryJob() {
@@ -104,8 +122,7 @@ func (b *Bot) runDailySummaryJob() {
 			}
 			parisTime := utcTime.In(parisLocation)
 
-			log.Printf("Ticker triggered at %v Paris time", parisTime)
-			if parisTime.Hour() == 13 && parisTime.Minute() == 35 {
+			if parisTime.Hour() == 14 && (parisTime.Minute() >= 15 && parisTime.Minute() < 17) {
 				log.Println("Running daily summary")
 				b.PublishDailySummary()
 				log.Println("Daily summary completed")
