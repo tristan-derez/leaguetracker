@@ -94,9 +94,9 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 	// Add individual summoner progress
 	for _, p := range progress {
 		lpChange := p.CurrentLP - p.PreviousLP
-		nameField := fmt.Sprintf("%s  •  %+dLP (%dW/%dL)", p.Name, lpChange, p.Wins, p.Losses)
+		nameField := fmt.Sprintf("**%s**  •  %+dLP (%dW/%dL)", p.Name, lpChange, p.Wins, p.Losses)
 
-		valueField := fmt.Sprintf("***%s %s • %d LP ➡️ %s %s • %d LP***",
+		valueField := fmt.Sprintf("-# %s %s • %d LP ➡️ %s %s • %d LP",
 			utils.CapitalizeFirst(strings.ToLower(p.PreviousTier)), p.PreviousRank, p.PreviousLP,
 			utils.CapitalizeFirst(strings.ToLower(p.CurrentTier)), p.CurrentRank, p.CurrentLP)
 
