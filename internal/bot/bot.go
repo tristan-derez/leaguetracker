@@ -69,6 +69,8 @@ func (b *Bot) Run() error {
 		}
 		b.mu.Unlock()
 		log.Println("Initial guild setup complete")
+
+		go b.TrackMatches()
 	})
 
 	b.session.AddHandler(b.handleGuildCreate)
@@ -170,13 +172,6 @@ func (b *Bot) handleGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) 
 	}
 
 	log.Printf("Added new guild to database: %s (%s)", g.Name, g.ID)
-
-	// Increment the wait group counter
-	// This is used to keep track of active goroutines
-	b.wg.Add(1)
-
-	// Start tracking matches for this guild in a new goroutine
-	go b.TrackMatches(g.ID)
 }
 
 // Shutdown gracefully stops the bot and closes all resources.

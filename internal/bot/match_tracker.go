@@ -13,158 +13,123 @@ import (
 	u "github.com/tristan-derez/league-tracker/internal/utils"
 )
 
-// TrackMatches continuously monitors and tracks matches for all summoners in a given guild.
-// It runs indefinitely, periodically checking for new summoners and initiating tracking for them.
-func (b *Bot) TrackMatches(guildID string) error {
+// TrackMatches continuously monitors and tracks matches for all summoners across all guilds.
+// It runs indefinitely, periodically checking for new matches and announcing them to relevant guilds.
+func (b *Bot) TrackMatches() {
 	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
-	trackedSummoners := make(map[string]bool)
-
-	guildName, err := b.storage.GetGuildName(guildID)
-	if err != nil {
-		log.Printf("Error fetching guild name for ID %s: %v", guildID, err)
-		guildName = "Unknown Guild" // Fallback name if we can't fetch the real name
-	}
-
 	for range ticker.C {
-		summoners, err := b.storage.GetAllSummonersForGuild(guildID)
+		summoners, err := b.storage.GetAllSummonersWithGuilds()
 		if err != nil {
 			log.Printf("Error getting summoners: %v", err)
 			continue
 		}
 
-		if len(summoners) == 0 {
-			continue // no summoner in guild
-		}
-
-		log.Printf("🕵️ Tracking summoners in guild: %v", guildName)
+		log.Printf("🕵️ Tracking matches for %d summoners", len(summoners))
 
 		for _, summoner := range summoners {
-			if !trackedSummoners[summoner.SummonerPUUID] {
-				trackedSummoners[summoner.SummonerPUUID] = true
-				go func(s riotapi.Summoner) {
-					for {
-						matchFound, err := b.trackSummonerMatches(guildID, s)
-						if err != nil {
-							log.Printf("Error tracking matches for summoner %s: %v", s.Name, err)
-							time.Sleep(30 * time.Second)
-							continue
-						}
+			go func(s s.SummonerWithGuilds) {
+				backoffStrategy := backoff.NewExponentialBackOff()
+				backoffStrategy.InitialInterval = 500 * time.Millisecond
+				backoffStrategy.MaxInterval = 5 * time.Second
+				backoffStrategy.MaxElapsedTime = 30 * time.Second
 
-						if matchFound {
-							time.Sleep(15 * time.Minute)
-						} else {
-							time.Sleep(2 * time.Minute)
+				operation := func() error {
+					matchFound, newMatch, err := b.checkForNewMatch(s.Summoner)
+					if err != nil {
+						if riotapi.IsRateLimitError(err) {
+							return err // Retryable error
 						}
+						return backoff.Permanent(err) // Non-retryable error
 					}
-				}(summoner)
-			}
+
+					if matchFound {
+						b.processAndAnnounceNewMatch(s, newMatch)
+					}
+
+					return nil // Success
+				}
+
+				err := backoff.Retry(operation, backoffStrategy)
+				if err != nil {
+					log.Printf("Failed to track matches for %s after multiple retries: %v", s.Summoner.Name, err)
+				}
+			}(summoner)
+		}
+	}
+}
+
+// processAndAnnounceNewMatch processes a new match and announces it to all relevant guilds.
+func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch *riotapi.MatchData) {
+	summonerID, err := b.storage.GetSummonerIDFromRiotID(summoner.Summoner.RiotSummonerID)
+	if err != nil {
+		log.Printf("Error getting internal summonerID for %s: %v", summoner.Summoner.Name, err)
+		return
+	}
+
+	previousRank, err := b.storage.GetPreviousRank(summonerID)
+	if err != nil {
+		log.Printf("Error getting previous rank: %v", err)
+		return
+	}
+
+	currentRankInfo, err := b.riotClient.GetSummonerRank(summoner.Summoner.RiotSummonerID)
+	if err != nil {
+		log.Printf("Error fetching current rank for %s: %v", summoner.Summoner.Name, err)
+		return
+	}
+
+	lpChange, err := b.storage.AddMatchAndGetLPChange(summoner.Summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Rank, currentRankInfo.Tier)
+	if err != nil {
+		log.Printf("Error storing match and calculating LP change for %s: %v", summoner.Summoner.Name, err)
+		return
+	}
+
+	currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
+	if err != nil {
+		log.Printf("Warning: %v", err)
+	}
+
+	embed := b.prepareMatchEmbed(summoner.Summoner, newMatch, currentRankInfo, lpChange, currentVersion, previousRank)
+
+	for _, guildID := range summoner.GuildIDs {
+		if err := b.announceNewMatch(guildID, embed); err != nil {
+			log.Printf("Error announcing new match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
 		}
 	}
 
-	return nil
+	log.Printf("New match processed for %s in %d guilds", summoner.Summoner.Name, len(summoner.GuildIDs))
 }
 
-// trackSummonerMatches tracks matches for a summoner, using exponential backoff
-// for rate limit errors. It retries up to 5 times, with delays ranging from 1 second to 15 minutes.
-// Returns true if a match was found and tracked, false otherwise. Non-rate-limit errors
-// are returned immediately without retrying.
-func (b *Bot) trackSummonerMatches(guildID string, summoner riotapi.Summoner) (bool, error) {
-	backoffStrategy := backoff.NewExponentialBackOff()
-	backoffStrategy.InitialInterval = 500 * time.Millisecond
-	backoffStrategy.MaxInterval = 5 * time.Second
-	backoffStrategy.MaxElapsedTime = 30 * time.Second
-
-	var matchFound bool
-
-	operation := func() error {
-		var err error
-		matchFound, err = b.performSummonerMatchCheck(guildID, summoner)
-		if err != nil {
-			if riotapi.IsRateLimitError(err) {
-				return err // Retryable error
-			}
-			return backoff.Permanent(err) // Non-retryable error
-		}
-		return nil // Success
-	}
-
-	err := backoff.Retry(operation, backoffStrategy)
-	if err != nil {
-		return false, fmt.Errorf("failed to track matches for %s: %w", summoner.Name, err)
-	}
-
-	return matchFound, nil
-}
-
-// performSummonerMatchCheck checks for new matches for a given summoner and processes them.
-// It fetches the last known match, checks for new ones, updates the database,
-// and announces the new match in the guild's channel.
-func (b *Bot) performSummonerMatchCheck(guildID string, summoner riotapi.Summoner) (bool, error) {
-	guildName, err := b.storage.GetGuildName(guildID)
-	if err != nil {
-		log.Printf("Error fetching guild name for ID %s: %v", guildID, err)
-		guildName = "Unknown Guild" // Fallback name if we can't fetch the real name
-	}
-
+// checkForNewMatch checks if there's a new match for the given summoner.
+func (b *Bot) checkForNewMatch(summoner riotapi.Summoner) (bool, *riotapi.MatchData, error) {
 	storedMatchID, err := b.storage.GetLastMatchID(summoner.SummonerPUUID)
 	if err != nil {
-		log.Printf("Error getting stored match ID for %s: %v", summoner.Name, err)
-		return false, err
+		return false, nil, fmt.Errorf("error getting stored match ID: %v", err)
 	}
 
 	hasNewMatch, newMatch, err := b.riotClient.GetNewMatchForSummoner(summoner.SummonerPUUID, storedMatchID)
 	if err != nil {
-		return false, fmt.Errorf("error checking for new match for %s: %v", summoner.Name, err)
+		return false, nil, fmt.Errorf("error checking for new match: %v", err)
 	}
 
-	if !hasNewMatch {
-		return false, nil
-	}
+	return hasNewMatch, newMatch, nil
+}
 
-	summonerID, err := b.storage.GetSummonerIDFromRiotID(summoner.RiotSummonerID)
+// announceNewMatch sends the embed to the channel that was set for updates
+func (b *Bot) announceNewMatch(guildID string, embed *dg.MessageEmbed) error {
+	channelID, err := b.storage.GetGuildChannelID(guildID)
 	if err != nil {
-		log.Printf("Error getting internal summonerID for %s: %v", summoner.Name, err)
-		return false, err
+		return fmt.Errorf("error getting channel ID for guild %s: %w", guildID, err)
 	}
 
-	// Get previous rank before adding the new match
-	previousRank, err := b.storage.GetPreviousRank(summonerID)
+	_, err = b.session.ChannelMessageSendEmbed(channelID, embed)
 	if err != nil {
-		log.Printf("Error getting previous rank: %v", err)
-		return false, err
+		return fmt.Errorf("error sending embed message to channel %s: %w", channelID, err)
 	}
 
-	currentRankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
-	if err != nil {
-		log.Printf("Error fetching current rank for %s: %v", summoner.Name, err)
-		return false, err
-	}
-
-	// Add the new match to the database and get the LP change
-	lpChange, err := b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Rank, currentRankInfo.Tier)
-	if err != nil {
-		log.Printf("Error storing match and calculating LP change for %s: %v", summoner.Name, err)
-		return false, err
-	}
-
-	// Get current version for champion image
-	currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
-	if err != nil {
-		log.Printf("Warning: %v\n", err)
-	}
-
-	// Prepare the embed for the announcement
-	embed := b.prepareMatchEmbed(summoner, newMatch, currentRankInfo, lpChange, currentVersion, previousRank)
-
-	// Announce the new match
-	if err := b.announceNewMatch(guildID, embed); err != nil {
-		log.Printf("Error announcing new match for %s: %v", summoner.Name, err)
-	}
-
-	log.Printf("New match processed for %s in guild: %v", summoner.Name, guildName)
-	return true, nil
+	return nil
 }
 
 // prepareMatchEmbed creates and returns a Discord message embed for a match.
@@ -235,19 +200,4 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	}
 
 	return embed
-}
-
-// announceNewMatch sends the embed to the channel that was set for updates
-func (b *Bot) announceNewMatch(guildID string, embed *dg.MessageEmbed) error {
-	channelID, err := b.storage.GetGuildChannelID(guildID)
-	if err != nil {
-		return fmt.Errorf("error getting channel ID for guild %s: %w", guildID, err)
-	}
-
-	_, err = b.session.ChannelMessageSendEmbed(channelID, embed)
-	if err != nil {
-		return fmt.Errorf("error sending embed message to channel %s: %w", channelID, err)
-	}
-
-	return nil
 }

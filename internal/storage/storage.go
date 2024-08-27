@@ -156,17 +156,6 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 		return 0, fmt.Errorf("error fetching summoner ID: %w", err)
 	}
 
-	// Check if this match has already been processed for this summoner
-	lastLPChange, lastMatchID, err := s.getLastLPHistory(summonerID)
-	if err != nil {
-		return 0, fmt.Errorf("error checking last LP history: %w", err)
-	}
-
-	if lastMatchID == matchData.MatchID {
-		// Match already processed, return stored LP change
-		return lastLPChange, nil
-	}
-
 	err = s.insertMatchData(summonerID, matchData)
 	if err != nil {
 		return 0, err
@@ -269,22 +258,6 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 	}
 
 	return lpChange
-}
-
-// getLastLPHistory retrieves the last LP change and match ID from the lp_history table for a given summoner
-func (s *Storage) getLastLPHistory(summonerID int) (int, string, error) {
-	var lpChange int
-	var matchID string
-	err := s.db.QueryRow(string(selectLastLPKnownSQL), summonerID).Scan(&lpChange, &matchID)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return 0, "", nil // No history found
-		}
-		return 0, "", err
-	}
-
-	return lpChange, matchID, nil
 }
 
 // ListSummoners retrieves and returns a list of summoners with their ranks for a given guild id.
@@ -481,6 +454,32 @@ func (s *Storage) GetAllGuilds() ([]Guild, error) {
 	return guilds, nil
 }
 
+func (s *Storage) GetAllSummonersWithGuilds() ([]SummonerWithGuilds, error) {
+	rows, err := s.db.Query(string(selectSummonerInGuildSQL))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var summoners []SummonerWithGuilds
+	for rows.Next() {
+		var s SummonerWithGuilds
+		var guildIDs string
+		err := rows.Scan(
+			&s.Summoner.RiotSummonerID, &s.Summoner.RiotAccountID, &s.Summoner.SummonerPUUID,
+			&s.Summoner.ProfileIconID, &s.Summoner.RevisionDate, &s.Summoner.SummonerLevel, &s.Summoner.Name,
+			&guildIDs,
+		)
+		if err != nil {
+			return nil, err
+		}
+		s.GuildIDs = strings.Split(strings.Trim(guildIDs, "{}"), ",")
+		summoners = append(summoners, s)
+	}
+
+	return summoners, rows.Err()
+}
+
 type Guild struct {
 	ID        string
 	Name      string
@@ -508,6 +507,11 @@ type DailySummonerProgress struct {
 	PreviousLP   int
 	Wins         int
 	Losses       int
+}
+
+type SummonerWithGuilds struct {
+	Summoner riotapi.Summoner
+	GuildIDs []string
 }
 
 var tierOrder = map[string]int{

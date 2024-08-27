@@ -239,11 +239,12 @@ const (
         (dp_latest.new_lp - dp_earliest.new_lp) DESC
     `
 
-	selectLastLPKnownSQL SQLQuery = `
-    SELECT lp_change, match_id 
-    FROM lp_history 
-    WHERE summoner_id = $1 
-    ORDER BY timestamp DESC 
-    LIMIT 1
+	selectSummonerInGuildSQL SQLQuery = `
+        SELECT s.riot_summoner_id, s.riot_account_id, s.riot_summoner_puuid, 
+               s.profile_icon_id, s.revision_date, s.summoner_level, s.name,
+               array_agg(gsa.guild_id) as guild_ids
+        FROM summoners s
+        JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
+        GROUP BY s.id
     `
 )
