@@ -18,8 +18,10 @@ func (b *Bot) PublishDailySummary() {
 		log.Printf("Error getting guilds: %v", err)
 		return
 	}
+	log.Printf("Retrieved %d guilds for daily summary", len(guilds))
 
 	for _, guild := range guilds {
+		log.Printf("Processing guild: %s", guild.ID)
 		progress, err := b.storage.GetDailySummonerProgress(guild.ID)
 		if err != nil {
 			log.Printf("Error getting daily summoner progress for guild %s: %v", guild.ID, err)
@@ -27,12 +29,13 @@ func (b *Bot) PublishDailySummary() {
 		}
 
 		if len(progress) == 0 {
-			continue // Skip guilds with no progress to report
+			log.Printf("No progress to report for guild %s", guild.ID)
+			continue
 		}
+		log.Printf("Found progress for %d summoners in guild %s", len(progress), guild.ID)
 
 		summary := b.formatDailySummary(progress)
 
-		// Use the ChannelID from the Guild struct
 		if guild.ChannelID == "" {
 			log.Printf("No channel ID set for guild %s", guild.ID)
 			continue
@@ -41,6 +44,8 @@ func (b *Bot) PublishDailySummary() {
 		_, err = b.session.ChannelMessageSend(guild.ChannelID, summary)
 		if err != nil {
 			log.Printf("Error sending daily summary to guild %s: %v", guild.ID, err)
+		} else {
+			log.Printf("Successfully sent daily summary to guild %s", guild.ID)
 		}
 	}
 }
@@ -81,6 +86,7 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) strin
 }
 
 func (b *Bot) runDailySummaryJob() {
+	log.Println("Starting daily summary job")
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -90,9 +96,19 @@ func (b *Bot) runDailySummaryJob() {
 			log.Println("Stopping daily summary job")
 			return
 		case t := <-ticker.C:
-			if t.Hour() == 0 && t.Minute() == 5 {
+			utcTime := t.UTC()
+			parisLocation, err := time.LoadLocation("Europe/Paris")
+			if err != nil {
+				log.Printf("Error loading Paris time zone: %v", err)
+				continue
+			}
+			parisTime := utcTime.In(parisLocation)
+
+			log.Printf("Ticker triggered at %v Paris time", parisTime)
+			if parisTime.Hour() == 13 && parisTime.Minute() == 35 {
 				log.Println("Running daily summary")
 				b.PublishDailySummary()
+				log.Println("Daily summary completed")
 				time.Sleep(time.Minute)
 			}
 		}
