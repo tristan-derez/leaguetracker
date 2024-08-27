@@ -70,7 +70,7 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 
 	// Create the first embed for best and worst performers
 	summaryEmbed := &discordgo.MessageEmbed{
-		Title: "Daily Summary - Top Performers",
+		Title: "Daily Summary",
 		Color: 0x3498db,
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -78,7 +78,7 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 				Value: fmt.Sprintf("%s (%+d LP)", progress[0].Name, progress[0].CurrentLP-progress[0].PreviousLP),
 			},
 			{
-				Name:  "😢 Saddest summoner",
+				Name:  "**😢 Saddest summoner**",
 				Value: fmt.Sprintf("%s (%+d LP)", progress[len(progress)-1].Name, progress[len(progress)-1].CurrentLP-progress[len(progress)-1].PreviousLP),
 			},
 		},
@@ -94,7 +94,7 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 	// Add individual summoner progress
 	for _, p := range progress {
 		lpChange := p.CurrentLP - p.PreviousLP
-		nameField := fmt.Sprintf("%s • %+dLP (%dW/%dL)", p.Name, lpChange, p.Wins, p.Losses)
+		nameField := fmt.Sprintf("%s  •  %+dLP (%dW/%dL)", p.Name, lpChange, p.Wins, p.Losses)
 
 		valueField := fmt.Sprintf("***%s %s • %d LP ➡️ %s %s • %d LP***",
 			utils.CapitalizeFirst(strings.ToLower(p.PreviousTier)), p.PreviousRank, p.PreviousLP,
@@ -127,7 +127,7 @@ func (b *Bot) runDailySummaryJob() {
 			}
 			parisTime := utcTime.In(parisLocation)
 
-			if parisTime.Hour() == 14 && (parisTime.Minute() == 45) {
+			if parisTime.Hour() == 00 && (parisTime.Minute() == 05) {
 				log.Println("Running daily summary")
 				b.PublishDailySummary()
 				log.Println("Daily summary completed")
