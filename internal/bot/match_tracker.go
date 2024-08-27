@@ -7,7 +7,6 @@ import (
 	"time"
 
 	dg "github.com/bwmarrin/discordgo"
-	"github.com/cenkalti/backoff/v4"
 	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
 	s "github.com/tristan-derez/league-tracker/internal/storage"
 	u "github.com/tristan-derez/league-tracker/internal/utils"
@@ -16,46 +15,48 @@ import (
 // TrackMatches continuously monitors and tracks matches for all summoners across all guilds.
 // It runs indefinitely, periodically checking for new matches and announcing them to relevant guilds.
 func (b *Bot) TrackMatches() {
-	ticker := time.NewTicker(2 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		summoners, err := b.storage.GetAllSummonersWithGuilds()
-		if err != nil {
-			log.Printf("Error getting summoners: %v", err)
-			continue
-		}
+	for {
+		select {
+		case <-b.ctx.Done():
+			log.Println("Stopping match tracking")
+			return
+		case <-ticker.C:
+			summoners, err := b.storage.GetAllSummonersWithGuilds()
+			if err != nil {
+				log.Printf("Error fetching summoners: %v", err)
+				continue
+			}
 
-		log.Printf("🕵️ Tracking matches for %d summoners", len(summoners))
+			log.Printf("🕵️ Tracking matches for %d summoners", len(summoners))
 
-		for _, summoner := range summoners {
-			go func(s s.SummonerWithGuilds) {
-				backoffStrategy := backoff.NewExponentialBackOff()
-				backoffStrategy.InitialInterval = 500 * time.Millisecond
-				backoffStrategy.MaxInterval = 5 * time.Second
-				backoffStrategy.MaxElapsedTime = 30 * time.Second
+			for _, summoner := range summoners {
 
-				operation := func() error {
-					matchFound, newMatch, err := b.checkForNewMatch(s.Summoner)
+				err := u.RetryWithBackoff(func() error {
+					matchFound, newMatch, err := b.checkForNewMatch(summoner.Summoner)
 					if err != nil {
 						if riotapi.IsRateLimitError(err) {
 							return err // Retryable error
 						}
-						return backoff.Permanent(err) // Non-retryable error
+						return u.NewNonRetryableError(err)
 					}
 
 					if matchFound {
-						b.processAndAnnounceNewMatch(s, newMatch)
+						b.processAndAnnounceNewMatch(summoner, newMatch)
 					}
 
 					return nil // Success
-				}
-
-				err := backoff.Retry(operation, backoffStrategy)
+				}, u.DefaultRetryConfig)
 				if err != nil {
-					log.Printf("Failed to track matches for %s after multiple retries: %v", s.Summoner.Name, err)
+					if _, nonRetryable := err.(*u.NonRetryableError); nonRetryable {
+						log.Printf("Non-retryable error occurred while checking matches for %s: %v", summoner.Summoner.Name, err)
+					} else {
+						log.Printf("Failed to check matches for %s after multiple retries: %v", summoner.Summoner.Name, err)
+					}
 				}
-			}(summoner)
+			}
 		}
 	}
 }
@@ -124,12 +125,14 @@ func (b *Bot) announceNewMatch(guildID string, embed *dg.MessageEmbed) error {
 		return fmt.Errorf("error getting channel ID for guild %s: %w", guildID, err)
 	}
 
-	_, err = b.session.ChannelMessageSendEmbed(channelID, embed)
-	if err != nil {
-		return fmt.Errorf("error sending embed message to channel %s: %w", channelID, err)
-	}
+	return u.RetryWithBackoff(func() error {
+		_, err := b.session.ChannelMessageSendEmbed(channelID, embed)
+		if err != nil {
+			return fmt.Errorf("error sending embed message to channel %s: %w", channelID, err)
+		}
+		return nil
+	}, u.DefaultRetryConfig)
 
-	return nil
 }
 
 // prepareMatchEmbed creates and returns a Discord message embed for a match.
