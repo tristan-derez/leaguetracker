@@ -127,7 +127,7 @@ func (b *Bot) runDailySummaryJob() {
 			}
 			parisTime := utcTime.In(parisLocation)
 
-			if parisTime.Hour() == 00 && (parisTime.Minute() == 05) {
+			if parisTime.Hour() == 00 && (parisTime.Minute() == 15) {
 				log.Println("Running daily summary")
 				b.PublishDailySummary()
 				log.Println("Daily summary completed")
