@@ -3,7 +3,6 @@ package bot
 import (
 	"fmt"
 	"log"
-	"sort"
 	"strings"
 	"time"
 
@@ -63,10 +62,11 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 		}}
 	}
 
-	// Sort the progress slice by LP change (descending)
-	sort.Slice(progress, func(i, j int) bool {
-		return (progress[i].CurrentLP - progress[i].PreviousLP) > (progress[j].CurrentLP - progress[j].PreviousLP)
-	})
+	happiestSummoner := progress[0]
+	saddestSummoner := progress[len(progress)-1]
+
+	happiestSummonerLPChange := happiestSummoner.CurrentLP - happiestSummoner.PreviousLP
+	saddestSummonerLPChange := saddestSummoner.CurrentLP - saddestSummoner.PreviousLP
 
 	// Create the first embed for best and worst performers
 	summaryEmbed := &discordgo.MessageEmbed{
@@ -75,11 +75,11 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:  "**🏆 Happiest summoner**",
-				Value: fmt.Sprintf("%s (%+d LP)", progress[0].Name, progress[0].CurrentLP-progress[0].PreviousLP),
+				Value: fmt.Sprintf("%s (%+d LP)", happiestSummoner.Name, happiestSummonerLPChange),
 			},
 			{
 				Name:  "**😢 Saddest summoner**",
-				Value: fmt.Sprintf("%s (%+d LP)", progress[len(progress)-1].Name, progress[len(progress)-1].CurrentLP-progress[len(progress)-1].PreviousLP),
+				Value: fmt.Sprintf("%s (%+d LP)", saddestSummoner.Name, saddestSummonerLPChange),
 			},
 		},
 	}
