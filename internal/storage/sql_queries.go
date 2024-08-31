@@ -179,16 +179,16 @@ const (
 	// Get daily progress for summoners in a guild for the previous day
 	getDailySummonerProgressSQL SQLQuery = `
     SELECT 
-    s.name,
-    MAX(lh.tier) AS current_tier,
-    MAX(lh.rank) AS current_rank,
-    MAX(lh.new_lp) AS current_lp,
-    MIN(lh.tier) AS previous_tier,
-    MIN(lh.rank) AS previous_rank,
-    MIN(lh.new_lp) AS previous_lp,
-    COUNT(*) FILTER (WHERE lh.lp_change > 0) AS wins,
-    COUNT(*) FILTER (WHERE lh.lp_change < 0) AS losses,
-    SUM(lh.lp_change) AS total_lp_change
+        s.name,
+        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp DESC))[1] AS current_tier,
+        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp DESC))[1] AS current_rank,
+        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp DESC))[1] AS current_lp,
+        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp ASC))[1] AS previous_tier,
+        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp ASC))[1] AS previous_rank,
+        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp ASC))[1] AS previous_lp,
+        COUNT(*) FILTER (WHERE lh.lp_change > 0) AS wins,
+        COUNT(*) FILTER (WHERE lh.lp_change < 0) AS losses,
+        SUM(lh.lp_change) AS total_lp_change
     FROM 
         lp_history lh
     JOIN 
