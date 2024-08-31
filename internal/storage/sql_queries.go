@@ -178,47 +178,28 @@ const (
 
 	// Get daily progress for summoners in a guild for the previous day
 	getDailySummonerProgressSQL SQLQuery = `
-    WITH daily_progress AS (
-        SELECT 
-            s.name,
-            gsa.guild_id,
-            lh.summoner_id,
-            DATE(lh.timestamp AT TIME ZONE 'UTC') AS date,
-            SUM(lh.lp_change) AS total_lp_change,
-            COUNT(CASE WHEN lh.lp_change > 0 THEN 1 END) AS wins,
-            COUNT(CASE WHEN lh.lp_change < 0 THEN 1 END) AS losses,
-            FIRST_VALUE(lh.tier) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp) AS start_tier,
-            FIRST_VALUE(lh.rank) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp) AS start_rank,
-            FIRST_VALUE(lh.new_lp) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp) AS start_lp,
-            FIRST_VALUE(lh.tier) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp DESC) AS end_tier,
-            FIRST_VALUE(lh.rank) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp DESC) AS end_rank,
-            FIRST_VALUE(lh.new_lp) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp DESC) AS end_lp
-        FROM 
-            lp_history lh
-        JOIN 
-            summoners s ON lh.summoner_id = s.id
-        JOIN 
-            guild_summoner_associations gsa ON s.id = gsa.summoner_id
-        WHERE 
-            gsa.guild_id = $1
-            AND DATE(lh.timestamp AT TIME ZONE 'UTC') = CURRENT_DATE AT TIME ZONE 'UTC'
-    )
     SELECT 
-        name,
-        end_tier AS current_tier,
-        end_rank AS current_rank,
-        end_lp AS current_lp,
-        start_tier AS previous_tier,
-        start_rank AS previous_rank,
-        start_lp AS previous_lp,
-        wins,
-        losses,
-        total_lp_change
+    s.name,
+    MAX(lh.tier) AS current_tier,
+    MAX(lh.rank) AS current_rank,
+    MAX(lh.new_lp) AS current_lp,
+    MIN(lh.tier) AS previous_tier,
+    MIN(lh.rank) AS previous_rank,
+    MIN(lh.new_lp) AS previous_lp,
+    COUNT(*) FILTER (WHERE lh.lp_change > 0) AS wins,
+    COUNT(*) FILTER (WHERE lh.lp_change < 0) AS losses,
+    SUM(lh.lp_change) AS total_lp_change
     FROM 
-        daily_progress
+        lp_history lh
+    JOIN 
+        summoners s ON lh.summoner_id = s.id
+    JOIN 
+        guild_summoner_associations gsa ON s.id = gsa.summoner_id
+    WHERE 
+        gsa.guild_id = $1
+        AND lh.timestamp::date = CURRENT_DATE - INTERVAL '1 day'
     GROUP BY 
-        name, guild_id, summoner_id, date, total_lp_change, wins, losses,
-        start_tier, start_rank, start_lp, end_tier, end_rank, end_lp
+        s.name
     ORDER BY 
         total_lp_change DESC
     `
