@@ -178,70 +178,49 @@ const (
 
 	// Get daily progress for summoners in a guild for the previous day
 	getDailySummonerProgressSQL SQLQuery = `
-    WITH target_date AS (
-    -- Determine the previous day in UTC
-    SELECT (CURRENT_DATE AT TIME ZONE 'UTC' - INTERVAL '1 day')::DATE AS date
-    ),
-    daily_progress AS (
-        -- Get all LP changes for each summoner in the guild for the previous day
+    WITH daily_progress AS (
         SELECT 
-            s.id AS summoner_id,
             s.name,
-            lh.tier,
-            lh.rank,
-            lh.new_lp,
-            lh.lp_change,
-            lh.timestamp AT TIME ZONE 'UTC' AS timestamp_utc,
-            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp AT TIME ZONE 'UTC' ASC) AS rn_earliest,
-            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp AT TIME ZONE 'UTC' DESC) AS rn_latest
+            gsa.guild_id,
+            lh.summoner_id,
+            DATE(lh.timestamp AT TIME ZONE 'UTC') AS date,
+            SUM(lh.lp_change) AS total_lp_change,
+            COUNT(CASE WHEN lh.lp_change > 0 THEN 1 END) AS wins,
+            COUNT(CASE WHEN lh.lp_change < 0 THEN 1 END) AS losses,
+            FIRST_VALUE(lh.tier) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp) AS start_tier,
+            FIRST_VALUE(lh.rank) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp) AS start_rank,
+            FIRST_VALUE(lh.new_lp) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp) AS start_lp,
+            FIRST_VALUE(lh.tier) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp DESC) AS end_tier,
+            FIRST_VALUE(lh.rank) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp DESC) AS end_rank,
+            FIRST_VALUE(lh.new_lp) OVER (PARTITION BY s.id, DATE(lh.timestamp AT TIME ZONE 'UTC') ORDER BY lh.timestamp DESC) AS end_lp
         FROM 
-            summoners s
+            lp_history lh
+        JOIN 
+            summoners s ON lh.summoner_id = s.id
         JOIN 
             guild_summoner_associations gsa ON s.id = gsa.summoner_id
-        JOIN 
-            lp_history lh ON s.id = lh.summoner_id
-        CROSS JOIN
-            target_date td
         WHERE 
             gsa.guild_id = $1
-            AND lh.timestamp AT TIME ZONE 'UTC' >= td.date  -- Filter to previous day
-            AND lh.timestamp AT TIME ZONE 'UTC' < td.date + INTERVAL '1 day'
-    ),
-    summoner_stats AS (
-        -- Calculate the total LP change and capture start and end tier/rank for display
-        SELECT
-            dp.summoner_id,
-            MIN(dp.new_lp) FILTER (WHERE dp.rn_earliest = 1) AS start_lp,
-            MAX(dp.new_lp) FILTER (WHERE dp.rn_latest = 1) AS end_lp,
-            MIN(dp.tier) FILTER (WHERE dp.rn_earliest = 1) AS start_tier,
-            MAX(dp.tier) FILTER (WHERE dp.rn_latest = 1) AS end_tier,
-            MIN(dp.rank) FILTER (WHERE dp.rn_earliest = 1) AS start_rank,
-            MAX(dp.rank) FILTER (WHERE dp.rn_latest = 1) AS end_rank,
-            SUM(dp.lp_change) AS total_lp_change,
-            SUM(CASE WHEN dp.lp_change > 0 THEN 1 ELSE 0 END) AS wins,
-            SUM(CASE WHEN dp.lp_change < 0 THEN 1 ELSE 0 END) AS losses
-        FROM
-            daily_progress dp
-        GROUP BY
-            dp.summoner_id
+            AND DATE(lh.timestamp AT TIME ZONE 'UTC') = CURRENT_DATE AT TIME ZONE 'UTC'
     )
     SELECT 
-        s.name,
-        ss.start_tier AS previous_tier,
-        ss.start_rank AS previous_rank,
-        ss.start_lp AS previous_lp,
-        ss.end_tier AS current_tier,
-        ss.end_rank AS current_rank,
-        ss.end_lp AS current_lp,
-        COALESCE(ss.wins, 0) AS wins,
-        COALESCE(ss.losses, 0) AS losses,
-        COALESCE(ss.total_lp_change, 0) AS lp_change
+        name,
+        end_tier AS current_tier,
+        end_rank AS current_rank,
+        end_lp AS current_lp,
+        start_tier AS previous_tier,
+        start_rank AS previous_rank,
+        start_lp AS previous_lp,
+        wins,
+        losses,
+        total_lp_change
     FROM 
-        summoner_stats ss
-    JOIN 
-        summoners s ON ss.summoner_id = s.id
+        daily_progress
+    GROUP BY 
+        name, guild_id, summoner_id, date, total_lp_change, wins, losses,
+        start_tier, start_rank, start_lp, end_tier, end_rank, end_lp
     ORDER BY 
-        ss.total_lp_change DESC NULLS LAST;
+        total_lp_change DESC
     `
 
 	selectSummonerInGuildSQL SQLQuery = `
