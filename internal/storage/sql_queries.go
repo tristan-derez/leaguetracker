@@ -189,9 +189,9 @@ const (
             lh.rank,
             lh.new_lp,
             lh.lp_change,
-            lh.timestamp,
-            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp DESC) AS rn_latest,
-            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp ASC) AS rn_earliest
+            lh.timestamp AT TIME ZONE 'UTC' AS timestamp_utc,
+            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp AT TIME ZONE 'UTC' DESC) AS rn_latest,
+            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp AT TIME ZONE 'UTC' ASC) AS rn_earliest
         FROM 
             summoners s
         JOIN 
@@ -202,43 +202,49 @@ const (
             target_date td
         WHERE 
             gsa.guild_id = $1
-            AND lh.timestamp >= td.date
-            AND lh.timestamp < td.date + INTERVAL '1 day'
+            AND lh.timestamp AT TIME ZONE 'UTC' >= td.date
+            AND lh.timestamp AT TIME ZONE 'UTC' < td.date + INTERVAL '1 day'
+    ),
+    latest_progress AS (
+        SELECT * FROM daily_progress WHERE rn_latest = 1
+    ),
+    earliest_progress AS (
+        SELECT * FROM daily_progress WHERE rn_earliest = 1
     ),
     summoner_stats AS (
         SELECT
-            summoner_id,
-            SUM(CASE WHEN lp_change > 0 THEN 1 ELSE 0 END) AS wins,
-            SUM(CASE WHEN lp_change < 0 THEN 1 ELSE 0 END) AS losses,
-            SUM(lp_change) AS total_lp_change
+            dp.summoner_id,
+            SUM(CASE WHEN dp.lp_change > 0 THEN 1 ELSE 0 END) AS wins,
+            SUM(CASE WHEN dp.lp_change < 0 THEN 1 ELSE 0 END) AS losses,
+            SUM(dp.lp_change) AS total_lp_change
         FROM
-            daily_progress
+            daily_progress dp
         GROUP BY
-            summoner_id
+            dp.summoner_id
     )
     SELECT 
-        dp_latest.name,
-        dp_latest.tier AS current_tier,
-        dp_latest.rank AS current_rank,
-        dp_latest.new_lp AS current_lp,
-        dp_earliest.tier AS previous_tier,
-        dp_earliest.rank AS previous_rank,
-        dp_earliest.new_lp AS previous_lp,
+        lp.name,
+        lp.tier AS current_tier,
+        lp.rank AS current_rank,
+        lp.new_lp AS current_lp,
+        ep.tier AS previous_tier,
+        ep.rank AS previous_rank,
+        ep.new_lp AS previous_lp,
         COALESCE(ss.wins, 0) AS wins,
         COALESCE(ss.losses, 0) AS losses,
         COALESCE(ss.total_lp_change, 0) AS lp_change
     FROM 
-        daily_progress dp_latest
+        latest_progress lp
     JOIN 
-        daily_progress dp_earliest ON dp_latest.summoner_id = dp_earliest.summoner_id
+        earliest_progress ep ON lp.summoner_id = ep.summoner_id
     LEFT JOIN
-        summoner_stats ss ON dp_latest.summoner_id = ss.summoner_id
+        summoner_stats ss ON lp.summoner_id = ss.summoner_id
     WHERE 
-        dp_latest.rn_latest = 1
-        AND dp_earliest.rn_earliest = 1
-        AND (dp_latest.new_lp != dp_earliest.new_lp OR dp_latest.tier != dp_earliest.tier OR dp_latest.rank != dp_earliest.rank)
+        lp.new_lp != ep.new_lp 
+        OR lp.tier != ep.tier 
+        OR lp.rank != ep.rank
     ORDER BY 
-        ss.total_lp_change DESC NULLS LAST
+        ss.total_lp_change DESC NULLS LAST;
     `
 
 	selectSummonerInGuildSQL SQLQuery = `
