@@ -190,8 +190,8 @@ const (
             lh.new_lp,
             lh.lp_change,
             lh.timestamp,
-            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp ASC) AS rn_earliest,
-            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp DESC) AS rn_latest
+            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp DESC) AS rn_latest,
+            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp ASC) AS rn_earliest
         FROM 
             summoners s
         JOIN 
@@ -204,6 +204,17 @@ const (
             gsa.guild_id = $1
             AND lh.timestamp >= td.date
             AND lh.timestamp < td.date + INTERVAL '1 day'
+    ),
+    summoner_stats AS (
+        SELECT
+            summoner_id,
+            SUM(CASE WHEN lp_change > 0 THEN 1 ELSE 0 END) AS wins,
+            SUM(CASE WHEN lp_change < 0 THEN 1 ELSE 0 END) AS losses,
+            SUM(lp_change) AS total_lp_change
+        FROM
+            daily_progress
+        GROUP BY
+            summoner_id
     )
     SELECT 
         dp_latest.name,
@@ -213,31 +224,29 @@ const (
         dp_earliest.tier AS previous_tier,
         dp_earliest.rank AS previous_rank,
         dp_earliest.new_lp AS previous_lp,
-        SUM(CASE WHEN dp_latest.lp_change > 0 THEN 1 ELSE 0 END) AS wins,
-        SUM(CASE WHEN dp_latest.lp_change < 0 THEN 1 ELSE 0 END) AS losses
+        COALESCE(ss.wins, 0) AS wins,
+        COALESCE(ss.losses, 0) AS losses,
+        COALESCE(ss.total_lp_change, 0) AS lp_change
     FROM 
-        daily_progress dp_earliest
+        daily_progress dp_latest
     JOIN 
-        daily_progress dp_latest 
-        ON dp_earliest.summoner_id = dp_latest.summoner_id
-        AND dp_latest.rn_latest = 1
-        AND dp_earliest.rn_earliest = 1
+        daily_progress dp_earliest ON dp_latest.summoner_id = dp_earliest.summoner_id
+    LEFT JOIN
+        summoner_stats ss ON dp_latest.summoner_id = ss.summoner_id
     WHERE 
-        dp_latest.new_lp != dp_earliest.new_lp 
-        OR dp_latest.tier != dp_earliest.tier 
-        OR dp_latest.rank != dp_earliest.rank
-    GROUP BY 
-        dp_latest.name, dp_latest.tier, dp_latest.rank, dp_latest.new_lp, dp_earliest.tier, dp_earliest.rank, dp_earliest.new_lp
+        dp_latest.rn_latest = 1
+        AND dp_earliest.rn_earliest = 1
+        AND (dp_latest.new_lp != dp_earliest.new_lp OR dp_latest.tier != dp_earliest.tier OR dp_latest.rank != dp_earliest.rank)
     ORDER BY 
-        (dp_latest.new_lp - dp_earliest.new_lp) DESC;
+        ss.total_lp_change DESC NULLS LAST
     `
 
 	selectSummonerInGuildSQL SQLQuery = `
-        SELECT s.riot_summoner_id, s.riot_account_id, s.riot_summoner_puuid, 
-               s.profile_icon_id, s.revision_date, s.summoner_level, s.name,
-               array_agg(gsa.guild_id) as guild_ids
-        FROM summoners s
-        JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
-        GROUP BY s.id
+    SELECT s.riot_summoner_id, s.riot_account_id, s.riot_summoner_puuid, 
+            s.profile_icon_id, s.revision_date, s.summoner_level, s.name,
+            array_agg(gsa.guild_id) as guild_ids
+    FROM summoners s
+    JOIN guild_summoner_associations gsa ON s.id = gsa.summoner_id
+    GROUP BY s.id
     `
 )

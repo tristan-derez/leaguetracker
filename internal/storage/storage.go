@@ -508,6 +508,7 @@ type DailySummonerProgress struct {
 	PreviousLP   int
 	Wins         int
 	Losses       int
+	LPChange     int
 }
 
 type SummonerWithGuilds struct {
