@@ -201,7 +201,7 @@ func (c *Client) GetLastRankedSoloMatchData(summonerPUUID string) (*MatchData, e
 	}
 
 	if len(matchIDs) == 0 {
-		return nil, fmt.Errorf("no recent ranked solo matches found")
+		return nil, nil
 	}
 
 	matchData, err := c.GetMatchData(matchIDs[0], summonerPUUID)

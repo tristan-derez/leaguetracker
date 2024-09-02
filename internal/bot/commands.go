@@ -103,7 +103,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
 			if err != nil {
-				log.Printf("No recent ranked matches found for '%s': %v", summonerName, err)
+				log.Printf("error retrieving ranked games for '%s': %v", summonerName, err)
 			}
 
 			if lastMatchData != nil {
@@ -111,6 +111,8 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				if err != nil {
 					log.Printf("Error adding match data for '%s': %v", summonerName, err)
 				}
+			} else {
+				log.Printf("No recent ranked matches found for summoner %s", summonerName)
 			}
 		}
 
