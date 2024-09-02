@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -184,7 +183,6 @@ func (c *Client) GetRankedSoloMatchIDs(puuid string, count int) ([]string, error
 	}
 
 	if len(matchIDs) == 0 {
-		log.Printf("No ranked solo matches found for PUUID: %s", puuid)
 		return nil, nil
 	}
 
