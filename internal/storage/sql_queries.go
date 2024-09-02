@@ -180,12 +180,12 @@ const (
 	getDailySummonerProgressSQL SQLQuery = `
     SELECT 
         s.name,
-        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp DESC))[1] AS current_tier,
-        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp DESC))[1] AS current_rank,
-        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp DESC))[1] AS current_lp,
-        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp ASC))[1] AS previous_tier,
-        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp ASC))[1] AS previous_rank,
-        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp ASC))[1] AS previous_lp,
+        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_tier,
+        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_rank,
+        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_lp,
+        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_tier,
+        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_rank,
+        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_lp,
         COUNT(*) FILTER (WHERE lh.lp_change > 0) AS wins,
         COUNT(*) FILTER (WHERE lh.lp_change < 0) AS losses,
         SUM(lh.lp_change) AS total_lp_change
