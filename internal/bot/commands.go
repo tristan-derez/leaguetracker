@@ -69,11 +69,10 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
 			if err != nil {
 				if riotapi.IsRateLimitError(err) {
-					responses = append(responses, "⚠️ Rate limit exceeded. Please try again later.")
+					log.Printf("Rate limit exceeded. Please try again later.")
 					break
 				}
 				if apiErr, ok := err.(*riotapi.RiotAPIError); ok {
-					responses = append(responses, fmt.Sprintf("❌ Error finding '%s'", summonerName))
 					log.Printf(apiErr.Message)
 				} else {
 					responses = append(responses, fmt.Sprintf("❌ Unable to find '%s': %v", summonerName, err))
@@ -83,14 +82,12 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
 			if err != nil {
-				responses = append(responses, fmt.Sprintf("❌ Error fetching details for '%s'.", summonerName))
 				log.Printf("❌ Error fetching details for '%s': %v", summonerName, err)
 				continue
 			}
 
 			rankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
 			if err != nil {
-				responses = append(responses, fmt.Sprintf("❌ Error fetching rank for '%s'.", summonerName))
 				log.Printf("Error fetching rank for '%s': %v", summonerName, err)
 				continue
 			}
@@ -104,16 +101,16 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			responses = append(responses, fmt.Sprintf("✅ '%s' (Level %d) added. Rank: %s %s %d LP",
 				summonerName, summoner.SummonerLevel, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
 
-			// here we just log the error because not finding match could happen at start of season
-			// or just because the player didnt play for a long time
 			lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
 			if err != nil {
-				log.Printf("Error fetching last ranked solo match data for PUUID %s: %v", account.SummonerPUUID, err)
-				continue
+				log.Printf("No recent ranked matches found for '%s': %v", summonerName, err)
 			}
 
 			if lastMatchData != nil {
-				b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
+				_, err := b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
+				if err != nil {
+					log.Printf("Error adding match data for '%s': %v", summonerName, err)
+				}
 			}
 		}
 

@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 
@@ -81,15 +82,26 @@ func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch
 		return
 	}
 
+	currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
+	if err != nil {
+		log.Printf("Warning: %v", err)
+	}
+
+	if currentRankInfo.Tier == "UNRANKED" && currentRankInfo.Rank == "" {
+		log.Printf("Summoner %s is in placement.", summoner.Summoner.Name)
+		b.storage.AddPlacementMatch(summoner.Summoner.RiotSummonerID, newMatch)
+		embed := b.preparePlacementMatchEmbed(summoner.Summoner, newMatch, currentVersion)
+		for _, guildID := range summoner.GuildIDs {
+			if err := b.announceNewMatch(guildID, embed); err != nil {
+				log.Printf("Error announcing new match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
+			}
+		}
+	}
+
 	lpChange, err := b.storage.AddMatchAndGetLPChange(summoner.Summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Rank, currentRankInfo.Tier)
 	if err != nil {
 		log.Printf("Error storing match and calculating LP change for %s: %v", summoner.Summoner.Name, err)
 		return
-	}
-
-	currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
-	if err != nil {
-		log.Printf("Warning: %v", err)
 	}
 
 	embed := b.prepareMatchEmbed(summoner.Summoner, newMatch, currentRankInfo, lpChange, currentVersion, previousRank)
@@ -169,7 +181,6 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
 	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 
-	// Create the embed
 	embed := &dg.MessageEmbed{
 		Description: fmt.Sprintf("**[%s (%s LP)](%s)**", summoner.Name, lpChangeStr, leagueOfGraphLink),
 		Color:       embedColor,
@@ -199,6 +210,61 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 		},
 		Footer: &dg.MessageEmbedFooter{
 			Text: fullFooterStr,
+		},
+	}
+
+	return embed
+}
+
+func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchData, currentVersion string) *dg.MessageEmbed {
+	// Calculate KDA
+	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
+
+	var embedColor int
+	switch {
+	case match.GameDuration < 240:
+		embedColor = 0x808080 // Grey
+	case strings.ToLower(match.Result) == "win":
+		embedColor = 0x00FF00 // Green
+	case strings.ToLower(match.Result) == "loss":
+		embedColor = 0xFF0000 // Red
+	default:
+		embedColor = 0x808080 // Grey
+	}
+
+	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
+	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
+	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
+	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
+
+	embed := &dg.MessageEmbed{
+		Description: fmt.Sprintf("**[%s • placement game](%s)**", summoner.Name, leagueOfGraphLink),
+		Color:       embedColor,
+		Thumbnail: &dg.MessageEmbedThumbnail{
+			URL: championImageURL,
+		},
+		Fields: []*dg.MessageEmbedField{
+			{
+				Value:  fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
+				Inline: false,
+			},
+			{
+				Value:  fmt.Sprintf("%s | %s | %d/%d/%d (%.2f:1 KDA)", match.ChampionName, match.Result, match.Kills, match.Deaths, match.Assists, kda),
+				Inline: false,
+			},
+			{
+				Name:   "Dmg to champions",
+				Value:  fmt.Sprintf("%d", match.TotalDamageDealtToChampions),
+				Inline: true,
+			},
+			{
+				Name:   "CS",
+				Value:  fmt.Sprintf("%d (%d/min)", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60)),
+				Inline: true,
+			},
+		},
+		Footer: &dg.MessageEmbedFooter{
+			Text: endOfGameStr,
 		},
 	}
 

@@ -158,7 +158,7 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 
 	err = s.insertMatchData(summonerID, matchData)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("error inserting match data: %w", err)
 	}
 
 	previousRank, err := s.GetPreviousRank(summonerID)
@@ -184,6 +184,42 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	}
 
 	return lpChange, nil
+}
+
+// AddPlacementMatch adds a new match record to the database for a given summoner that is in placement games.
+func (s *Storage) AddPlacementMatch(riotSummonerID string, matchData *riotapi.MatchData) error {
+	summonerID, err := s.GetSummonerIDFromRiotID(riotSummonerID)
+	if err != nil {
+		return fmt.Errorf("error fetching summoner ID: %w", err)
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	err = s.insertMatchData(summonerID, matchData)
+	if err != nil {
+		return fmt.Errorf("error inserting match data: %w", err)
+	}
+
+	err = s.createNewRowInLPHistory(summonerID, matchData.MatchID, 0, 0, "UNRANKED", "")
+	if err != nil {
+		return fmt.Errorf("error creating new row in lp history: %w", err)
+	}
+
+	err = s.updateLeagueEntry(summonerID, 0, "UNRANKED", "")
+	if err != nil {
+		return fmt.Errorf("error updating league entry: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 // insertMatchData inserts match data for a summoner into the database.

@@ -84,21 +84,19 @@ func (c *Client) GetSummonerRank(RiotSummonerID string) (*LeagueEntry, error) {
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
 
-	if len(leagueEntries) == 0 {
-		return &LeagueEntry{
-			QueueType: "RANKED_SOLO_5x5",
-			Tier:      "UNRANKED",
-			Rank:      "",
-		}, nil
-	}
-
+	// Look for solo queue entry
 	for _, entry := range leagueEntries {
 		if entry.QueueType == "RANKED_SOLO_5x5" {
 			return &entry, nil
 		}
 	}
 
-	return nil, fmt.Errorf("no solo queue entry found for summoner ID %s", RiotSummonerID)
+	return &LeagueEntry{
+		QueueType:    "RANKED_SOLO_5x5",
+		Tier:         "UNRANKED",
+		Rank:         "",
+		LeaguePoints: 0,
+	}, nil
 }
 
 // GetMatchData fetch summoner match data using the matchID, summonerPUUID is used to find participant.
@@ -187,7 +185,7 @@ func (c *Client) GetRankedSoloMatchIDs(puuid string, count int) ([]string, error
 
 	if len(matchIDs) == 0 {
 		log.Printf("No ranked solo matches found for PUUID: %s", puuid)
-		return nil, fmt.Errorf("no ranked solo matches found for the given PUUID")
+		return nil, nil
 	}
 
 	return matchIDs, nil
