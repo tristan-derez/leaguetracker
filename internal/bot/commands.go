@@ -98,8 +98,8 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				continue
 			}
 
-			responses = append(responses, fmt.Sprintf("✅ '%s' (Level %d) added. Rank: %s %s %d LP",
-				summonerName, summoner.SummonerLevel, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
+			responses = append(responses, fmt.Sprintf("✅ '%s' added. %s %s %d LP",
+				summonerName, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
 
 			lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
 			if err != nil {
