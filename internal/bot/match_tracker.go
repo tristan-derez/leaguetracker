@@ -273,7 +273,7 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 				Inline: false,
 			},
 			{
-				Value:  fmt.Sprintf("%s | %s | %d/%d/%d (%.2f:1 KDA)", match.ChampionName, match.Result, match.Kills, match.Deaths, match.Assists, kda),
+				Value:  fmt.Sprintf("%dk/%dd/%da (%.2f:1 KDA) • %d (%d/min)", match.Kills, match.Deaths, match.Assists, kda, match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60)),
 				Inline: false,
 			},
 			{
@@ -282,14 +282,8 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 				Inline: true,
 			},
 			{
-				Name:   "CS",
-				Value:  fmt.Sprintf("%d (%d/min)", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60)),
-				Inline: true,
-			},
-			{
-				Name:   "Placement progress",
-				Value:  fmt.Sprintf("%d Win(s), %d Loss(es)", placementStatus.Wins, placementStatus.Losses),
-				Inline: true,
+				Value:  fmt.Sprintf("%dW, %dL", placementStatus.Wins, placementStatus.Losses),
+				Inline: false,
 			},
 		},
 		Footer: &dg.MessageEmbedFooter{
