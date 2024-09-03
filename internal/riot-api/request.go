@@ -55,7 +55,7 @@ func (c *Client) makeRequest(url string) (*http.Response, error) {
 			} else {
 				time.Sleep(1 * time.Second)
 			}
-			return c.makeRequest(url)
+			return c.makeRequest(url) // Retry the request
 		}
 
 		return nil, apiError
