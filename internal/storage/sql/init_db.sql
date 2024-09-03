@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS guild_summoner_associations (
 CREATE TABLE IF NOT EXISTS placement_games (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     summoner_id UUID REFERENCES summoners(id),
-    season_year INTEGER NOT NULL,
+    season TEXT NOT NULL,
     total_games INTEGER NOT NULL DEFAULT 0,
     wins INTEGER NOT NULL DEFAULT 0,
     losses INTEGER NOT NULL DEFAULT 0,
