@@ -138,11 +138,6 @@ const (
     LIMIT 1
 	`
 
-	// get previous lp from league entries in database
-	selectLeaguePointsFromLeagueEntriesSQL SQLQuery = `
-    SELECT league_points FROM league_entries WHERE summoner_id = $1 AND queue_type = 'RANKED_SOLO_5x5'
-    `
-
 	// update LP, rank and tier in league entries
 	updateLeagueEntriesSQL SQLQuery = `
     UPDATE league_entries

@@ -64,13 +64,13 @@ func (b *Bot) TrackMatches() {
 
 // processAndAnnounceNewMatch processes a new match and announces it to all relevant guilds.
 func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch *riotapi.MatchData) {
-	summonerID, err := b.storage.GetSummonerIDFromRiotID(summoner.Summoner.RiotSummonerID)
+	summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.Summoner.RiotSummonerID)
 	if err != nil {
-		log.Printf("Error getting internal summonerID for %s: %v", summoner.Summoner.Name, err)
+		log.Printf("Error getting internal summonerUUID for %s: %v", summoner.Summoner.Name, err)
 		return
 	}
 
-	previousRank, err := b.storage.GetPreviousRank(summonerID)
+	previousRank, err := b.storage.GetPreviousRank(summonerUUID)
 	if err != nil {
 		log.Printf("Error getting previous rank: %v", err)
 		return

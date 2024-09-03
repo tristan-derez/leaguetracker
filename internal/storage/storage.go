@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"github.com/tristan-derez/league-tracker/internal/config"
 	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
@@ -72,17 +73,17 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 	}
 	defer tx.Rollback()
 
-	var summonerID int
+	var summonerUUID uuid.UUID
 	err = tx.QueryRow(string(insertSummonerSQL),
 		summonerName, summoner.RiotAccountID, summoner.RiotSummonerID, summoner.SummonerPUUID,
-		summoner.SummonerLevel, summoner.ProfileIconID, summoner.RevisionDate).Scan(&summonerID)
+		summoner.SummonerLevel, summoner.ProfileIconID, summoner.RevisionDate).Scan(&summonerUUID)
 	if err != nil {
 		return fmt.Errorf("insert/update summoner: %w", err)
 	}
 
 	if leagueEntry != nil {
 		_, err = tx.Exec(string(insertLeagueEntrySQL),
-			summonerID, leagueEntry.QueueType, leagueEntry.Tier, leagueEntry.Rank,
+			summonerUUID, leagueEntry.QueueType, leagueEntry.Tier, leagueEntry.Rank,
 			leagueEntry.LeaguePoints, leagueEntry.Wins, leagueEntry.Losses,
 			leagueEntry.HotStreak, leagueEntry.Veteran, leagueEntry.FreshBlood,
 			leagueEntry.Inactive)
@@ -91,7 +92,7 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 		}
 	}
 
-	_, err = tx.Exec(string(insertGuildSummonerAssociationSQL), guildID, summonerID)
+	_, err = tx.Exec(string(insertGuildSummonerAssociationSQL), guildID, summonerUUID)
 	if err != nil {
 		return fmt.Errorf("insert guild-summoner association: %w", err)
 	}
@@ -148,32 +149,32 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	}
 	defer tx.Rollback()
 
-	summonerID, err := s.GetSummonerIDFromRiotID(riotSummonerID)
+	summonerUUID, err := s.GetSummonerUUIDFromRiotID(riotSummonerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, fmt.Errorf("summoner with Riot ID %s not found", riotSummonerID)
 		}
-		return 0, fmt.Errorf("error fetching summoner ID: %w", err)
+		return 0, fmt.Errorf("error fetching summoner UUID: %w", err)
 	}
 
-	err = s.insertMatchData(summonerID, matchData)
+	err = s.insertMatchData(summonerUUID, matchData)
 	if err != nil {
 		return 0, fmt.Errorf("error inserting match data: %w", err)
 	}
 
-	previousRank, err := s.GetPreviousRank(summonerID)
+	previousRank, err := s.GetPreviousRank(summonerUUID)
 	if err != nil {
 		return 0, fmt.Errorf("error fetching previous rank: %w", err)
 	}
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
 
-	err = s.createNewRowInLPHistory(summonerID, matchData.MatchID, lpChange, newLP, newTier, newRank)
+	err = s.createNewRowInLPHistory(summonerUUID, matchData.MatchID, lpChange, newLP, newTier, newRank)
 	if err != nil {
 		return 0, err
 	}
 
-	err = s.updateLeagueEntry(summonerID, newLP, newTier, newRank)
+	err = s.updateLeagueEntry(summonerUUID, newLP, newTier, newRank)
 	if err != nil {
 		return 0, err
 	}
@@ -187,8 +188,9 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 }
 
 // AddPlacementMatch adds a new match record to the database for a given summoner that is in placement games.
+// no lp calculated because riot doesnt give informations about lp in placement.
 func (s *Storage) AddPlacementMatch(riotSummonerID string, matchData *riotapi.MatchData) error {
-	summonerID, err := s.GetSummonerIDFromRiotID(riotSummonerID)
+	summonerUUID, err := s.GetSummonerUUIDFromRiotID(riotSummonerID)
 	if err != nil {
 		return fmt.Errorf("error fetching summoner ID: %w", err)
 	}
@@ -199,17 +201,17 @@ func (s *Storage) AddPlacementMatch(riotSummonerID string, matchData *riotapi.Ma
 	}
 	defer tx.Rollback()
 
-	err = s.insertMatchData(summonerID, matchData)
+	err = s.insertMatchData(summonerUUID, matchData)
 	if err != nil {
 		return fmt.Errorf("error inserting match data: %w", err)
 	}
 
-	err = s.createNewRowInLPHistory(summonerID, matchData.MatchID, 0, 0, "UNRANKED", "")
+	err = s.createNewRowInLPHistory(summonerUUID, matchData.MatchID, 0, 0, "UNRANKED", "")
 	if err != nil {
 		return fmt.Errorf("error creating new row in lp history: %w", err)
 	}
 
-	err = s.updateLeagueEntry(summonerID, 0, "UNRANKED", "")
+	err = s.updateLeagueEntry(summonerUUID, 0, "UNRANKED", "")
 	if err != nil {
 		return fmt.Errorf("error updating league entry: %w", err)
 	}
@@ -223,8 +225,8 @@ func (s *Storage) AddPlacementMatch(riotSummonerID string, matchData *riotapi.Ma
 }
 
 // insertMatchData inserts match data for a summoner into the database.
-func (s *Storage) insertMatchData(summonerID int, matchData *riotapi.MatchData) error {
-	_, err := s.db.Exec(string(insertMatchDataSQL), summonerID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
+func (s *Storage) insertMatchData(summonerUUID uuid.UUID, matchData *riotapi.MatchData) error {
+	_, err := s.db.Exec(string(insertMatchDataSQL), summonerUUID, matchData.MatchID, matchData.ChampionName, matchData.GameCreation,
 		matchData.GameDuration, matchData.GameEndTimestamp, matchData.GameID, matchData.QueueID,
 		matchData.GameMode, matchData.GameType, matchData.Kills, matchData.Deaths, matchData.Assists,
 		matchData.Result, matchData.Pentakills, matchData.TeamPosition, matchData.TeamDamagePercentage, matchData.KillParticipation,
@@ -240,8 +242,8 @@ func (s *Storage) insertMatchData(summonerID int, matchData *riotapi.MatchData) 
 // createNewRowInLPHistory inserts a new record into the lp_history table for a summoner.
 // It captures the LP change, new LP total, tier, and rank for a specific match,
 // enabling detailed tracking of a summoner's rank progression over time.
-func (s *Storage) createNewRowInLPHistory(summonerID int, matchID string, lpChange, newLP int, tier, rank string) error {
-	_, err := s.db.Exec(string(insertLDataInLPHistorySQL), summonerID, matchID, lpChange, newLP, tier, rank)
+func (s *Storage) createNewRowInLPHistory(summonerUUID uuid.UUID, matchID string, lpChange, newLP int, tier, rank string) error {
+	_, err := s.db.Exec(string(insertLDataInLPHistorySQL), summonerUUID, matchID, lpChange, newLP, tier, rank)
 	if err != nil {
 		return fmt.Errorf("error inserting LP history: %w", err)
 	}
@@ -249,8 +251,8 @@ func (s *Storage) createNewRowInLPHistory(summonerID int, matchID string, lpChan
 }
 
 // updateLeagueEntry updates lp, tier and rank in league_entries for a summoner in the database.
-func (s *Storage) updateLeagueEntry(summonerID int, newLP int, newTier, newRank string) error {
-	_, err := s.db.Exec(string(updateLeagueEntriesSQL), newLP, newTier, newRank, summonerID)
+func (s *Storage) updateLeagueEntry(summonerUUID uuid.UUID, newLP int, newTier, newRank string) error {
+	_, err := s.db.Exec(string(updateLeagueEntriesSQL), newLP, newTier, newRank, summonerUUID)
 	if err != nil {
 		return fmt.Errorf("error updating league entry: %w", err)
 	}
@@ -392,35 +394,21 @@ func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, e
 	return summoners, rows.Err()
 }
 
-// GetLastKnownLP retrieves last lp stored in league entries.
-func (s *Storage) GetLastKnownLP(summonerID int) (int, error) {
-	var previousLP int
-	err := s.db.QueryRow(string(selectLeaguePointsFromLeagueEntriesSQL), summonerID).Scan(&previousLP)
+// GetSummonerUUIDFromRiotID retrieves the UUID of a summoner from riot_summoner_id.
+func (s *Storage) GetSummonerUUIDFromRiotID(riotSummonerID string) (uuid.UUID, error) {
+	var summonerUUID uuid.UUID
+	err := s.db.QueryRow("SELECT id FROM summoners WHERE riot_summoner_id = $1", riotSummonerID).Scan(&summonerUUID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("error fetching previous LP: %w", err)
+		return uuid.Nil, fmt.Errorf("error fetching summoner UUID: %w", err)
 	}
-
-	return previousLP, nil
+	return summonerUUID, nil
 }
 
-// GetSummonerIDFromRiotID retrives id of a summoner from riot_summoner_id.
-func (s *Storage) GetSummonerIDFromRiotID(riotSummonerID string) (int, error) {
-	var summonerID int
-	err := s.db.QueryRow("SELECT id FROM summoners WHERE riot_summoner_id = $1", riotSummonerID).Scan(&summonerID)
-	if err != nil {
-		return 0, fmt.Errorf("error fetching summoner ID: %w", err)
-	}
-	return summonerID, nil
-}
-
-// GetRankBySummonerId retrieves the rank from leagueEntries using the summoner ID.
+// GetRankBySummonerUUID retrieves the rank from leagueEntries using the summoner UUID.
 // This should be called before updating entries.
-func (s *Storage) GetPreviousRank(summonerID int) (*PreviousRank, error) {
+func (s *Storage) GetPreviousRank(summonerUUID uuid.UUID) (*PreviousRank, error) {
 	var prevRank PreviousRank
-	err := s.db.QueryRow(string(selectRankInLeagueEntriesSQL), summonerID).Scan(&prevRank.PrevTier, &prevRank.PrevRank, &prevRank.PrevLP)
+	err := s.db.QueryRow(string(selectRankInLeagueEntriesSQL), summonerUUID).Scan(&prevRank.PrevTier, &prevRank.PrevRank, &prevRank.PrevLP)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// No previous rank found, return nil with no error
