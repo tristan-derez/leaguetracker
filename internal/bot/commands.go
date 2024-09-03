@@ -82,7 +82,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
 			if err != nil {
-				log.Printf("❌ Error fetching details for '%s': %v", summonerName, err)
+				log.Printf("Error fetching details for '%s': %v", summonerName, err)
 				continue
 			}
 
@@ -90,6 +90,31 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			if err != nil {
 				log.Printf("Error fetching rank for '%s': %v", summonerName, err)
 				continue
+			}
+
+			if rankInfo.Tier == "UNRANKED" && rankInfo.Rank == "" {
+				placementStatus, err := b.riotClient.GetPlacementStatus(account.SummonerPUUID)
+				if err != nil {
+					log.Printf("Error fetching placement status for '%s': %v", summonerName, err)
+				}
+
+				currentSeason := b.storage.GetCurrentSeason()
+				summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.RiotSummonerID)
+				if err != nil {
+					log.Printf("Error getting summoner uuid for '%s': %v", summonerName, err)
+					continue
+				}
+
+				err = b.storage.UpdatePlacementGames(summonerUUID, currentSeason, placementStatus)
+				if err != nil {
+					log.Printf("Error updating placement games for summoner %s: %v", summonerUUID, err)
+					continue
+				}
+
+				if placementStatus.IsInPlacements {
+					responses = append(responses, fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
+						summonerName, placementStatus.GamesPlayed))
+				}
 			}
 
 			if err := b.storage.AddSummoner(i.GuildID, i.ChannelID, summonerName, *summoner, rankInfo); err != nil {

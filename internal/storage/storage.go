@@ -90,6 +90,12 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 		if err != nil {
 			return fmt.Errorf("insert/update league entry: %w", err)
 		}
+	} else {
+		currentSeason := s.GetCurrentSeason()
+		err = s.InitializePlacementGames(summonerUUID, currentSeason)
+		if err != nil {
+			return fmt.Errorf("initialize placement games: %w", err)
+		}
 	}
 
 	_, err = tx.Exec(string(insertGuildSummonerAssociationSQL), guildID, summonerUUID)
@@ -185,6 +191,67 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	}
 
 	return lpChange, nil
+}
+
+// InitializePlacementGames initializes or updates the placement games record for a summoner
+func (s *Storage) InitializePlacementGames(summonerUUID uuid.UUID, season Season) error {
+	seasonStr := SeasonToString(season)
+	_, err := s.db.Exec(`
+		INSERT INTO placement_games (summoner_id, season, total_games, wins, losses)
+		VALUES ($1, $2, 0, 0, 0)
+		ON CONFLICT (summoner_id, season) DO UPDATE
+		SET total_games = 0, wins = 0, losses = 0
+	`, summonerUUID, seasonStr)
+	return err
+}
+
+// UpdatePlacementGames updates the placement games record for a summoner
+func (s *Storage) UpdatePlacementGames(summonerUUID uuid.UUID, season Season, status *riotapi.PlacementStatus) error {
+	_, err := s.db.Exec(`
+        INSERT INTO placement_games (summoner_id, season, total_games, wins, losses)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (summoner_id, season) DO UPDATE
+        SET total_games = $3, wins = $4, losses = $5
+    `, summonerUUID, SeasonToString(season), status.GamesPlayed, status.Wins, status.Losses)
+	return err
+}
+
+// GetCurrentPlacementGames retrieves the current placement games status for a summoner
+func (s *Storage) GetCurrentPlacementGames(summonerUUID uuid.UUID) (*PlacementGames, error) {
+	currentSeason := s.GetCurrentSeason()
+	var pg PlacementGames
+	err := s.db.QueryRow(`
+        SELECT total_games, wins, losses
+        FROM placement_games
+        WHERE summoner_id = $1 AND season = $2
+    `, summonerUUID, SeasonToString(currentSeason)).Scan(&pg.TotalGames, &pg.Wins, &pg.Losses)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &pg, nil
+}
+
+// GetCurrentSeason returns the current season based on the current date
+func (s *Storage) GetCurrentSeason() Season {
+	now := time.Now()
+	year := now.Year()
+	month := now.Month()
+
+	if month >= time.January && month < time.May {
+		return Season{Year: year, Split: 1}
+	} else if month >= time.May && month < time.September {
+		return Season{Year: year, Split: 2}
+	} else {
+		return Season{Year: year, Split: 3}
+	}
+}
+
+// SeasonToString converts a Season struct to a string representation
+func SeasonToString(s Season) string {
+	return fmt.Sprintf("S%d S%d", s.Year, s.Split)
 }
 
 // AddPlacementMatch adds a new match record to the database for a given summoner that is in placement games.
@@ -551,4 +618,16 @@ var tierOrder = map[string]int{
 	"MASTER":      7,
 	"GRANDMASTER": 8,
 	"CHALLENGER":  9,
+}
+
+type Season struct {
+	Year  int
+	Split int
+}
+
+type PlacementGames struct {
+	Season     string
+	TotalGames int
+	Wins       int
+	Losses     int
 }

@@ -132,6 +132,45 @@ func findParticipant(participants []participant, summonerPUUID string) (*partici
 	return nil, fmt.Errorf("summoner not found in match data")
 }
 
+func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
+	matchIDs, err := c.GetRankedSoloMatchIDs(puuid, 5)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching match IDs: %w", err)
+	}
+
+	placementStatus := &PlacementStatus{
+		IsInPlacements: true,
+		GamesPlayed:    0,
+		Wins:           0,
+		Losses:         0,
+	}
+
+	for _, matchID := range matchIDs {
+		match, err := c.GetMatchData(matchID, puuid)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching match data: %w", err)
+		}
+
+		if match.QueueID != 420 {
+			continue
+		}
+
+		placementStatus.GamesPlayed++
+		if match.Win {
+			placementStatus.Wins++
+		} else {
+			placementStatus.Losses++
+		}
+
+		if placementStatus.GamesPlayed >= 5 {
+			placementStatus.IsInPlacements = false
+			break
+		}
+	}
+
+	return placementStatus, nil
+}
+
 // createMatchData constructs a MatchData struct from the given match information and participant data.
 // It takes the matchID, general match info, and specific participant data as input.
 func createMatchData(matchID string, info matchInfo, participant participant) *MatchData {
@@ -360,4 +399,11 @@ type participant struct {
 type challenge struct {
 	TeamDamagePercentage float64 `json:"teamDamagePercentage"`
 	KillParticipation    float64 `json:"killParticipation"`
+}
+
+type PlacementStatus struct {
+	IsInPlacements bool
+	GamesPlayed    int
+	Wins           int
+	Losses         int
 }
