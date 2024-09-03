@@ -109,6 +109,48 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 	return nil
 }
 
+// GetSummonerUUIDAndAssociate checks if a summoner exists in the database by their name.
+// If the summoner exists, it associates the summoner with the guild and returns the UUID.
+func (s *Storage) GetSummonerUUIDAndAssociate(guildID, channelID, summonerName string) (uuid.UUID, bool, error) {
+	var summonerUUID uuid.UUID
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return uuid.UUID{}, false, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Check if the summoner exists and get their UUID
+	err = tx.QueryRow(`
+        SELECT id FROM summoners
+        WHERE LOWER(name) = LOWER($1)
+    `, summonerName).Scan(&summonerUUID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Summoner does not exist
+			return uuid.UUID{}, false, nil
+		}
+		return uuid.UUID{}, false, fmt.Errorf("query summoner UUID: %w", err)
+	}
+
+	_, err = tx.Exec(string(insertGuildSummonerAssociationSQL), guildID, summonerUUID)
+	if err != nil {
+		return uuid.UUID{}, false, fmt.Errorf("insert guild-summoner association: %w", err)
+	}
+
+	_, err = tx.Exec(string(updateGuildWithChannelIDSQL), guildID, channelID)
+	if err != nil {
+		return uuid.UUID{}, false, fmt.Errorf("update guild channel: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return uuid.UUID{}, false, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return summonerUUID, true, nil
+}
+
 // ErrSummonerNotFound is returned when a summoner is not found in the database
 var ErrSummonerNotFound = errors.New("summoner not found")
 
@@ -185,6 +227,34 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	}
 
 	return lpChange, nil
+}
+
+// GetLeagueEntry retrieves the league entry (rank information) for a given summoner UUID.
+func (s *Storage) GetLeagueEntry(summonerUUID uuid.UUID) (*riotapi.LeagueEntry, error) {
+	var leagueEntry riotapi.LeagueEntry
+
+	err := s.db.QueryRow(`
+        SELECT queue_type, tier, rank, league_points, wins, losses, hot_streak, veteran, fresh_blood, inactive
+        FROM league_entries
+        WHERE summoner_id = $1
+    `, summonerUUID).Scan(
+		&leagueEntry.QueueType,
+		&leagueEntry.Tier,
+		&leagueEntry.Rank,
+		&leagueEntry.LeaguePoints,
+		&leagueEntry.Wins,
+		&leagueEntry.Losses,
+		&leagueEntry.HotStreak,
+		&leagueEntry.Veteran,
+		&leagueEntry.FreshBlood,
+		&leagueEntry.Inactive,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("fetching league entry: %w", err)
+	}
+
+	return &leagueEntry, nil
 }
 
 // InitializePlacementGames initializes the placement games record for a summoner

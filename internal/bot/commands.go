@@ -98,6 +98,23 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 	gameName := strings.TrimSpace(parts[0])
 	tagLine := strings.TrimSpace(parts[1])
 
+	// Check if the summoner exists and associate them with the guild if they do
+	summonerUUID, exists, err := b.storage.GetSummonerUUIDAndAssociate(guildID, channelID, summonerName)
+	if err != nil {
+		log.Printf("Error checking or associating summoner: %v", err)
+		return "❌ Error processing summoner."
+	}
+
+	if exists {
+		rankInfo, err := b.storage.GetLeagueEntry(summonerUUID)
+		if err != nil {
+			log.Printf("Error fetching league entry for '%s': %v", summonerName, err)
+			return "❌ Error fetching summoner rank."
+		}
+
+		return b.formatSummonerResponse(summonerName, rankInfo, "")
+	}
+
 	account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
 	if err != nil {
 		return fmt.Sprintf("❌ Unable to find '%s': %v", summonerName, err)
@@ -117,36 +134,40 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 		return fmt.Sprintf("❌ Error adding '%s' to database.", summonerName)
 	}
 
-	var response string
+	go b.addLastMatchData(summoner.RiotSummonerID, account.SummonerPUUID, *rankInfo)
+
+	return b.formatSummonerResponse(summonerName, rankInfo, account.SummonerPUUID)
+}
+
+func (b *Bot) formatSummonerResponse(summonerName string, rankInfo *riotapi.LeagueEntry, summonerPUUID string) string {
 	if rankInfo.Tier == "UNRANKED" && rankInfo.Rank == "" {
-		placementStatus, err := b.riotClient.GetPlacementStatus(account.SummonerPUUID)
+		placementStatus, err := b.riotClient.GetPlacementStatus(summonerPUUID)
 		if err != nil {
 			log.Printf("Error fetching placement status for '%s': %v", summonerName, err)
+			return "❌ Error fetching placement status."
+		}
+
+		summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summonerPUUID)
+		if err != nil {
+			log.Printf("Error getting summoner UUID for '%s': %v", summonerName, err)
+			return "❌ Error retrieving summoner UUID."
 		}
 
 		currentSeason := b.storage.GetCurrentSeason()
-		summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.RiotSummonerID)
-		if err != nil {
-			log.Printf("Error getting summoner uuid for '%s': %v", summonerName, err)
-		}
-
 		err = b.storage.InitializePlacementGames(summonerUUID, currentSeason, placementStatus)
 		if err != nil {
 			log.Printf("Error initializing placement games for summoner %s: %v", summonerUUID, err)
+			return "❌ Error initializing placement games."
 		}
 
 		if placementStatus.IsInPlacements {
-			response = fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
+			return fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
 				summonerName, placementStatus.TotalGames)
 		}
-	} else {
-		response = fmt.Sprintf("✅ '%s' added. %s %s %d LP",
-			summonerName, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
 	}
 
-	go b.addLastMatchData(summoner.RiotSummonerID, account.SummonerPUUID, *rankInfo)
-
-	return response
+	return fmt.Sprintf("✅ '%s' added. %s %s %d LP",
+		summonerName, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
 }
 
 func (b *Bot) addLastMatchData(summonerID, puuid string, rankInfo riotapi.LeagueEntry) {
