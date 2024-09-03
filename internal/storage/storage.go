@@ -239,10 +239,17 @@ func (s *Storage) GetCurrentSeason() Season {
 	now := time.Now()
 	year := now.Year()
 	month := now.Month()
+	day := now.Day()
 
-	if month >= time.January && month < time.May {
+	// split 1 starts the 10th of january
+	// split 2 starts the 25th of may
+	// split 3 start the 25th of september
+
+	if month == time.January && day < 10 {
+		return Season{Year: year - 1, Split: 3}
+	} else if month < time.May || (month == time.May && day <= 24) {
 		return Season{Year: year, Split: 1}
-	} else if month >= time.May && month < time.September {
+	} else if month < time.September || (month == time.September && day < 25) {
 		return Season{Year: year, Split: 2}
 	} else {
 		return Season{Year: year, Split: 3}
