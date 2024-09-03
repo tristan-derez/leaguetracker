@@ -92,9 +92,10 @@ func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch
 		log.Printf("Warning: %v", err)
 	}
 
-	if currentRankInfo.Tier == "UNRANKED" && currentRankInfo.Rank == "" {
-		log.Printf("Summoner %s is in placement.", summoner.Summoner.Name)
-		err := b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
+	wasInPlacements := (previousRank == nil || (previousRank.PrevTier == "UNRANKED" && previousRank.PrevRank == ""))
+
+	if wasInPlacements {
+		err = b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
 		if err != nil {
 			log.Printf("Error incrementing placement games for %s: %v", summoner.Summoner.Name, err)
 			return
@@ -106,40 +107,30 @@ func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch
 			return
 		}
 
-		newPlacementStatus, err := b.storage.GetCurrentPlacementGames(summonerUUID)
+		updatedPlacementStatus, err := b.storage.GetCurrentPlacementGames(summonerUUID)
 		if err != nil {
-			log.Printf("Error getting placement status for %s: %v", summoner.Summoner.Name, err)
+			log.Printf("Error getting updated placement status for %s: %v", summoner.Summoner.Name, err)
 			return
 		}
 
-		if newPlacementStatus.TotalGames == 5 {
-			newRankInfo, err := b.riotClient.GetSummonerRank(summoner.Summoner.RiotSummonerID)
+		var embed *dg.MessageEmbed
+		if currentRankInfo.Tier != "UNRANKED" || updatedPlacementStatus.TotalGames == 5 {
+			embed = b.preparePlacementCompletionEmbed(summoner.Summoner, newMatch, currentVersion, updatedPlacementStatus, currentRankInfo)
+
+			err = b.storage.UpdateLeagueEntry(summonerUUID, currentRankInfo.LeaguePoints, currentRankInfo.Tier, currentRankInfo.Rank)
 			if err != nil {
-				log.Printf("Error fetching new rank for %s after placements: %v", summoner.Summoner.Name, err)
-				return
-			}
-
-			err = b.storage.UpdateLeagueEntry(summonerUUID, newRankInfo.LeaguePoints, newRankInfo.Tier, newRankInfo.Rank)
-			if err != nil {
-				log.Printf("Error updating summoner rank for %s after placements: %v", summoner.Summoner.Name, err)
-				return
-			}
-
-			embed := b.preparePlacementCompletionEmbed(summoner.Summoner, newMatch, currentVersion, newPlacementStatus, newRankInfo)
-
-			for _, guildID := range summoner.GuildIDs {
-				if err := b.announceNewMatch(guildID, embed); err != nil {
-					log.Printf("Error announcing placement completion for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
-				}
+				log.Printf("Error updating summoner rank for %s: %v", summoner.Summoner.Name, err)
 			}
 		} else {
-			embed := b.preparePlacementMatchEmbed(summoner.Summoner, newMatch, currentVersion, newPlacementStatus)
-			for _, guildID := range summoner.GuildIDs {
-				if err := b.announceNewMatch(guildID, embed); err != nil {
-					log.Printf("Error announcing new placement match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
-				}
+			embed = b.preparePlacementMatchEmbed(summoner.Summoner, newMatch, currentVersion, updatedPlacementStatus)
+		}
+
+		for _, guildID := range summoner.GuildIDs {
+			if err := b.announceNewMatch(guildID, embed); err != nil {
+				log.Printf("Error announcing new placement match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
 			}
 		}
+
 		return
 	}
 
@@ -189,7 +180,6 @@ func (b *Bot) announceNewMatch(guildID string, embed *dg.MessageEmbed) error {
 		}
 		return nil
 	}, u.DefaultRetryConfig)
-
 }
 
 // prepareMatchEmbed creates and returns a Discord message embed for a match.
