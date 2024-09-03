@@ -142,14 +142,30 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 		}
 
-		finalResponse := strings.Join(responses, "\n\n")
+		var messageChunks []string
+		currentChunk := ""
+		for _, response := range responses {
+			if len(currentChunk)+len(response)+2 > 2000 { // +2 for "\n\n"
+				messageChunks = append(messageChunks, currentChunk)
+				currentChunk = response
+			} else {
+				if currentChunk != "" {
+					currentChunk += "\n\n"
+				}
+				currentChunk += response
+			}
+		}
+		if currentChunk != "" {
+			messageChunks = append(messageChunks, currentChunk)
+		}
 
-		// Send the final response as a follow-up message
-		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: finalResponse,
-		})
-		if err != nil {
-			log.Printf("Error sending follow-up message: %v", err)
+		for _, chunk := range messageChunks {
+			_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+				Content: chunk,
+			})
+			if err != nil {
+				log.Printf("Error sending follow-up message: %v", err)
+			}
 		}
 	}()
 }
