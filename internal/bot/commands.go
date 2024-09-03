@@ -161,8 +161,6 @@ func (b *Bot) addLastMatchData(summonerID, puuid string, rankInfo riotapi.League
 		if err != nil {
 			log.Printf("Error adding match data for '%s': %v", summonerID, err)
 		}
-	} else {
-		log.Printf("No recent ranked matches found for summoner %s", summonerID)
 	}
 }
 
