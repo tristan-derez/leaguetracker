@@ -133,7 +133,7 @@ func findParticipant(participants []participant, summonerPUUID string) (*partici
 }
 
 func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
-	matchIDs, err := c.GetRankedSoloMatchIDs(puuid, 5)
+	matchIDs, err := c.GetRankedSoloMatchIDs(puuid, 10) // Fetch more matches to ensure we have enough from the current split
 	if err != nil {
 		return nil, fmt.Errorf("error fetching match IDs: %w", err)
 	}
@@ -145,6 +145,8 @@ func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
 		Losses:         0,
 	}
 
+	currentSplit := getCurrentSplit()
+
 	for _, matchID := range matchIDs {
 		match, err := c.GetMatchData(matchID, puuid)
 		if err != nil {
@@ -153,6 +155,11 @@ func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
 
 		if match.QueueID != 420 {
 			continue
+		}
+
+		matchSplit := getSplitFromTimestamp(match.GameEndTimestamp)
+		if matchSplit != currentSplit {
+			continue // Skip matches from previous splits
 		}
 
 		placementStatus.TotalGames++
@@ -169,6 +176,46 @@ func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
 	}
 
 	return placementStatus, nil
+}
+
+func getCurrentSplit() int {
+	now := time.Now()
+	year := now.Year()
+	splitStartDates := []time.Time{
+		time.Date(year, time.January, 10, 0, 0, 0, 0, time.UTC),
+		time.Date(year, time.May, 25, 0, 0, 0, 0, time.UTC),
+		time.Date(year, time.September, 25, 0, 0, 0, 0, time.UTC),
+	}
+
+	for i, startDate := range splitStartDates {
+		if now.Before(startDate) {
+			if i == 0 {
+				return 3 // Last split of previous year
+			}
+			return i
+		}
+	}
+	return 3 // Last split of the year
+}
+
+func getSplitFromTimestamp(timestamp int64) int {
+	matchTime := time.Unix(timestamp/1000, 0)
+	year := matchTime.Year()
+	splitStartDates := []time.Time{
+		time.Date(year, time.January, 10, 0, 0, 0, 0, time.UTC),
+		time.Date(year, time.May, 25, 0, 0, 0, 0, time.UTC),
+		time.Date(year, time.September, 25, 0, 0, 0, 0, time.UTC),
+	}
+
+	for i, startDate := range splitStartDates {
+		if matchTime.Before(startDate) {
+			if i == 0 {
+				return 3 // Last split of previous year
+			}
+			return i
+		}
+	}
+	return 3 // Last split of the year
 }
 
 // createMatchData constructs a MatchData struct from the given match information and participant data.
