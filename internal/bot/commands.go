@@ -92,6 +92,12 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				continue
 			}
 
+			if err := b.storage.AddSummoner(i.GuildID, i.ChannelID, summonerName, *summoner, rankInfo); err != nil {
+				responses = append(responses, fmt.Sprintf("❌ Error adding '%s' to database.", summonerName))
+				log.Printf("Error adding summoner '%s' to database: %v", summonerName, err)
+				continue
+			}
+
 			if rankInfo.Tier == "UNRANKED" && rankInfo.Rank == "" {
 				placementStatus, err := b.riotClient.GetPlacementStatus(account.SummonerPUUID)
 				if err != nil {
@@ -115,12 +121,6 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					responses = append(responses, fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
 						summonerName, placementStatus.GamesPlayed))
 				}
-			}
-
-			if err := b.storage.AddSummoner(i.GuildID, i.ChannelID, summonerName, *summoner, rankInfo); err != nil {
-				responses = append(responses, fmt.Sprintf("❌ Error adding '%s' to database.", summonerName))
-				log.Printf("Error adding summoner '%s' to database: %v", summonerName, err)
-				continue
 			}
 
 			responses = append(responses, fmt.Sprintf("✅ '%s' added. %s %s %d LP",
