@@ -121,10 +121,10 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					responses = append(responses, fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
 						summonerName, placementStatus.GamesPlayed))
 				}
+			} else {
+				responses = append(responses, fmt.Sprintf("✅ '%s' added. %s %s %d LP",
+					summonerName, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
 			}
-
-			responses = append(responses, fmt.Sprintf("✅ '%s' added. %s %s %d LP",
-				summonerName, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
 
 			lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
 			if err != nil {
