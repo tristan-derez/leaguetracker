@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
@@ -50,124 +51,119 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Process summoners asynchronously
+	resultChan := make(chan string, 1)
+
 	go func() {
 		var responses []string
 
 		for _, summonerName := range summonerNames {
-			summonerName = strings.TrimSpace(strings.ToLower(summonerName))
-			parts := strings.SplitN(summonerName, "#", 2)
-
-			if len(parts) != 2 {
-				responses = append(responses, fmt.Sprintf("❌ Invalid format for '%s'. Use Name#Tag.", summonerName))
-				continue
-			}
-
-			gameName := strings.TrimSpace(parts[0])
-			tagLine := strings.TrimSpace(parts[1])
-
-			account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
-			if err != nil {
-				if riotapi.IsRateLimitError(err) {
-					log.Printf("Rate limit exceeded. Please try again later.")
-					break
-				}
-				if apiErr, ok := err.(*riotapi.RiotAPIError); ok {
-					log.Printf(apiErr.Message)
-				} else {
-					responses = append(responses, fmt.Sprintf("❌ Unable to find '%s': %v", summonerName, err))
-				}
-				continue
-			}
-
-			summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
-			if err != nil {
-				log.Printf("Error fetching details for '%s': %v", summonerName, err)
-				continue
-			}
-
-			rankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
-			if err != nil {
-				log.Printf("Error fetching rank for '%s': %v", summonerName, err)
-				continue
-			}
-
-			if err := b.storage.AddSummoner(i.GuildID, i.ChannelID, summonerName, *summoner, rankInfo); err != nil {
-				responses = append(responses, fmt.Sprintf("❌ Error adding '%s' to database.", summonerName))
-				log.Printf("Error adding summoner '%s' to database: %v", summonerName, err)
-				continue
-			}
-
-			if rankInfo.Tier == "UNRANKED" && rankInfo.Rank == "" {
-				placementStatus, err := b.riotClient.GetPlacementStatus(account.SummonerPUUID)
-				if err != nil {
-					log.Printf("Error fetching placement status for '%s': %v", summonerName, err)
-					continue
-				}
-
-				currentSeason := b.storage.GetCurrentSeason()
-				summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.RiotSummonerID)
-				if err != nil {
-					log.Printf("Error getting summoner uuid for '%s': %v", summonerName, err)
-					continue
-				}
-
-				err = b.storage.InitializePlacementGames(summonerUUID, currentSeason, placementStatus)
-				if err != nil {
-					log.Printf("Error initializing placement games for summoner %s: %v", summonerUUID, err)
-					continue
-				}
-
-				if placementStatus.IsInPlacements {
-					responses = append(responses, fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
-						summonerName, placementStatus.TotalGames))
-				}
-			} else {
-				responses = append(responses, fmt.Sprintf("✅ '%s' added. %s %s %d LP",
-					summonerName, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints))
-			}
-
-			lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(account.SummonerPUUID)
-			if err != nil {
-				log.Printf("error retrieving ranked games for '%s': %v", summonerName, err)
-			}
-
-			if lastMatchData != nil {
-				_, err := b.storage.AddMatchAndGetLPChange(summoner.RiotSummonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
-				if err != nil {
-					log.Printf("Error adding match data for '%s': %v", summonerName, err)
-				}
-			} else {
-				log.Printf("No recent ranked matches found for summoner %s", summonerName)
-			}
+			response := b.processSingleSummoner(summonerName, i.GuildID, i.ChannelID)
+			responses = append(responses, response)
 		}
 
-		var messageChunks []string
-		currentChunk := ""
-		for _, response := range responses {
-			if len(currentChunk)+len(response)+2 > 2000 { // +2 for "\n\n"
-				messageChunks = append(messageChunks, currentChunk)
-				currentChunk = response
-			} else {
-				if currentChunk != "" {
-					currentChunk += "\n\n"
-				}
-				currentChunk += response
-			}
-		}
-		if currentChunk != "" {
-			messageChunks = append(messageChunks, currentChunk)
-		}
+		fullResponse := strings.Join(responses, "\n\n")
+		resultChan <- fullResponse
+	}()
 
-		for _, chunk := range messageChunks {
-			_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+	select {
+	case result := <-resultChan:
+		// handle 2000 chars limit from discord
+		chunks := utils.ChunkMessage(result, 2000)
+		for _, chunk := range chunks {
+			_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 				Content: chunk,
 			})
 			if err != nil {
-				log.Printf("Error sending follow-up message: %v", err)
+				log.Printf("Error sending followup message: %v", err)
 			}
 		}
-	}()
+	case <-time.After(20 * time.Second):
+		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: "The operation is taking longer than expected. The summoners are being processed in the background. Please check the tracked summoners list later.",
+		})
+		if err != nil {
+			log.Printf("Error sending timeout followup message: %v", err)
+		}
+	}
+}
+
+func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) string {
+	summonerName = strings.TrimSpace(strings.ToLower(summonerName))
+	parts := strings.SplitN(summonerName, "#", 2)
+
+	if len(parts) != 2 {
+		return fmt.Sprintf("❌ Invalid format for '%s'. Use Name#Tag.", summonerName)
+	}
+
+	gameName := strings.TrimSpace(parts[0])
+	tagLine := strings.TrimSpace(parts[1])
+
+	account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
+	if err != nil {
+		return fmt.Sprintf("❌ Unable to find '%s': %v", summonerName, err)
+	}
+
+	summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
+	if err != nil {
+		log.Printf("Error fetching details for '%s': %v", summonerName, err)
+	}
+
+	rankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
+	if err != nil {
+		log.Printf("Error fetching rank for '%s': %v", summonerName, err)
+	}
+
+	if err := b.storage.AddSummoner(guildID, channelID, summonerName, *summoner, rankInfo); err != nil {
+		return fmt.Sprintf("❌ Error adding '%s' to database.", summonerName)
+	}
+
+	var response string
+	if rankInfo.Tier == "UNRANKED" && rankInfo.Rank == "" {
+		placementStatus, err := b.riotClient.GetPlacementStatus(account.SummonerPUUID)
+		if err != nil {
+			log.Printf("Error fetching placement status for '%s': %v", summonerName, err)
+		}
+
+		currentSeason := b.storage.GetCurrentSeason()
+		summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.RiotSummonerID)
+		if err != nil {
+			log.Printf("Error getting summoner uuid for '%s': %v", summonerName, err)
+		}
+
+		err = b.storage.InitializePlacementGames(summonerUUID, currentSeason, placementStatus)
+		if err != nil {
+			log.Printf("Error initializing placement games for summoner %s: %v", summonerUUID, err)
+		}
+
+		if placementStatus.IsInPlacements {
+			response = fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
+				summonerName, placementStatus.TotalGames)
+		}
+	} else {
+		response = fmt.Sprintf("✅ '%s' added. %s %s %d LP",
+			summonerName, rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
+	}
+
+	go b.addLastMatchData(summoner.RiotSummonerID, account.SummonerPUUID, *rankInfo)
+
+	return response
+}
+
+func (b *Bot) addLastMatchData(summonerID, puuid string, rankInfo riotapi.LeagueEntry) {
+	lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(puuid)
+	if err != nil {
+		log.Printf("error retrieving ranked games for '%s': %v", summonerID, err)
+		return
+	}
+
+	if lastMatchData != nil {
+		_, err := b.storage.AddMatchAndGetLPChange(summonerID, lastMatchData, rankInfo.LeaguePoints, rankInfo.Rank, rankInfo.Tier)
+		if err != nil {
+			log.Printf("Error adding match data for '%s': %v", summonerID, err)
+		}
+	} else {
+		log.Printf("No recent ranked matches found for summoner %s", summonerID)
+	}
 }
 
 // handleRemove processes the /remove command for the Discord bot.
