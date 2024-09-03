@@ -112,7 +112,7 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 			return "❌ Error fetching summoner rank."
 		}
 
-		return b.formatSummonerResponse(summonerName, rankInfo, "")
+		return b.formatSummonerResponse(summonerName, rankInfo, "", "")
 	}
 
 	account, err := b.riotClient.GetAccountPUUIDBySummonerName(gameName, tagLine)
@@ -136,10 +136,10 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 
 	go b.addLastMatchData(summoner.RiotSummonerID, account.SummonerPUUID, *rankInfo)
 
-	return b.formatSummonerResponse(summonerName, rankInfo, account.SummonerPUUID)
+	return b.formatSummonerResponse(summonerName, rankInfo, account.SummonerPUUID, summoner.RiotSummonerID)
 }
 
-func (b *Bot) formatSummonerResponse(summonerName string, rankInfo *riotapi.LeagueEntry, summonerPUUID string) string {
+func (b *Bot) formatSummonerResponse(summonerName string, rankInfo *riotapi.LeagueEntry, summonerPUUID, riotSummonerID string) string {
 	if rankInfo.Tier == "UNRANKED" && rankInfo.Rank == "" {
 		placementStatus, err := b.riotClient.GetPlacementStatus(summonerPUUID)
 		if err != nil {
@@ -147,7 +147,7 @@ func (b *Bot) formatSummonerResponse(summonerName string, rankInfo *riotapi.Leag
 			return "❌ Error fetching placement status."
 		}
 
-		summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summonerPUUID)
+		summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(riotSummonerID)
 		if err != nil {
 			log.Printf("Error getting summoner UUID for '%s': %v", summonerName, err)
 			return "❌ Error retrieving summoner UUID."
