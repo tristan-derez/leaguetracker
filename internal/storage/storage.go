@@ -66,10 +66,10 @@ func (s *Storage) Close() error {
 
 // AddSummoner adds or updates a summoner's information, their league entry if available,
 // and associates them with a guild in the database.
-func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner riotapi.Summoner, leagueEntry *riotapi.LeagueEntry) error {
+func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner riotapi.Summoner, leagueEntry *riotapi.LeagueEntry) (uuid.UUID, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return uuid.Nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -78,7 +78,7 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 		summonerName, summoner.RiotAccountID, summoner.RiotSummonerID, summoner.SummonerPUUID,
 		summoner.SummonerLevel, summoner.ProfileIconID, summoner.RevisionDate).Scan(&summonerUUID)
 	if err != nil {
-		return fmt.Errorf("insert/update summoner: %w", err)
+		return uuid.Nil, fmt.Errorf("insert/update summoner: %w", err)
 	}
 
 	if leagueEntry != nil {
@@ -88,25 +88,25 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 			leagueEntry.HotStreak, leagueEntry.Veteran, leagueEntry.FreshBlood,
 			leagueEntry.Inactive)
 		if err != nil {
-			return fmt.Errorf("insert/update league entry: %w", err)
+			return uuid.Nil, fmt.Errorf("insert/update league entry: %w", err)
 		}
 	}
 
 	_, err = tx.Exec(string(insertGuildSummonerAssociationSQL), guildID, summonerUUID)
 	if err != nil {
-		return fmt.Errorf("insert guild-summoner association: %w", err)
+		return uuid.Nil, fmt.Errorf("insert guild-summoner association: %w", err)
 	}
 
 	_, err = tx.Exec(string(updateGuildWithChannelIDSQL), guildID, channelID)
 	if err != nil {
-		return fmt.Errorf("update guild channel: %w", err)
+		return uuid.Nil, fmt.Errorf("update guild channel: %w", err)
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+		return uuid.Nil, fmt.Errorf("commit transaction: %w", err)
 	}
 
-	return nil
+	return summonerUUID, nil
 }
 
 // GetSummonerUUIDAndAssociate checks if a summoner exists in the database by their name.

@@ -131,7 +131,9 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 		log.Printf("Error fetching rank for '%s': %v", summonerName, err)
 	}
 
-	if err := b.storage.AddSummoner(guildID, channelID, summonerName, *summoner, rankInfo); err != nil {
+	summonerUUID, err = b.storage.AddSummoner(guildID, channelID, summonerName, *summoner, rankInfo)
+	if err != nil {
+		log.Printf("Error adding '%s' to database: %v", summonerName, err)
 		return fmt.Sprintf("❌ Error adding '%s' to database.", summonerName)
 	}
 
