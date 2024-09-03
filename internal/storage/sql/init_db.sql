@@ -1,4 +1,3 @@
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS guilds (
@@ -101,6 +100,6 @@ CREATE TABLE IF NOT EXISTS placement_games (
     losses INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(summoner_id, season_year),
+    UNIQUE(summoner_id, season),
     CONSTRAINT max_games CHECK (total_games <= 5)
 );
