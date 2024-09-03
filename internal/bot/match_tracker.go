@@ -31,6 +31,11 @@ func (b *Bot) TrackMatches() {
 				continue
 			}
 
+			if len(summoners) == 0 {
+				log.Print("No summoner to track for now")
+				continue
+			}
+
 			log.Printf("🕵️ Tracking matches for %d summoners", len(summoners))
 
 			for _, summoner := range summoners {
