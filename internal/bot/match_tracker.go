@@ -94,13 +94,31 @@ func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch
 
 	if currentRankInfo.Tier == "UNRANKED" && currentRankInfo.Rank == "" {
 		log.Printf("Summoner %s is in placement.", summoner.Summoner.Name)
-		b.storage.AddPlacementMatch(summoner.Summoner.RiotSummonerID, newMatch)
-		embed := b.preparePlacementMatchEmbed(summoner.Summoner, newMatch, currentVersion)
+		err := b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
+		if err != nil {
+			log.Printf("Error incrementing placement games for %s: %v", summoner.Summoner.Name, err)
+			return
+		}
+
+		err = b.storage.AddPlacementMatch(summonerUUID, newMatch)
+		if err != nil {
+			log.Printf("Error adding placement match for %s: %v", summoner.Summoner.Name, err)
+			return
+		}
+
+		newPlacementStatus, err := b.storage.GetCurrentPlacementGames(summonerUUID)
+		if err != nil {
+			log.Printf("Error getting placement status for %s: %v", summoner.Summoner.Name, err)
+			return
+		}
+
+		embed := b.preparePlacementMatchEmbed(summoner.Summoner, newMatch, currentVersion, newPlacementStatus)
 		for _, guildID := range summoner.GuildIDs {
 			if err := b.announceNewMatch(guildID, embed); err != nil {
-				log.Printf("Error announcing new match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
+				log.Printf("Error announcing new placement match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
 			}
 		}
+		return
 	}
 
 	lpChange, err := b.storage.AddMatchAndGetLPChange(summoner.Summoner.RiotSummonerID, newMatch, currentRankInfo.LeaguePoints, currentRankInfo.Rank, currentRankInfo.Tier)
@@ -221,7 +239,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	return embed
 }
 
-func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchData, currentVersion string) *dg.MessageEmbed {
+func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchData, currentVersion string, placementStatus *riotapi.PlacementStatus) *dg.MessageEmbed {
 	// Calculate KDA
 	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
 
@@ -241,9 +259,10 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
 	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
+	placementInfo := fmt.Sprintf("Placement game %d/5 completed", placementStatus.TotalGames)
 
 	embed := &dg.MessageEmbed{
-		Description: fmt.Sprintf("**[%s • placement game](%s)**", summoner.Name, leagueOfGraphLink),
+		Description: fmt.Sprintf("**[%s • %s](%s)**", summoner.Name, placementInfo, leagueOfGraphLink),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
@@ -265,6 +284,11 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 			{
 				Name:   "CS",
 				Value:  fmt.Sprintf("%d (%d/min)", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60)),
+				Inline: true,
+			},
+			{
+				Name:   "Placement progress",
+				Value:  fmt.Sprintf("%d Win(s), %d Loss(es)", placementStatus.Wins, placementStatus.Losses),
 				Inline: true,
 			},
 		},

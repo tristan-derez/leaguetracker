@@ -102,6 +102,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				placementStatus, err := b.riotClient.GetPlacementStatus(account.SummonerPUUID)
 				if err != nil {
 					log.Printf("Error fetching placement status for '%s': %v", summonerName, err)
+					continue
 				}
 
 				currentSeason := b.storage.GetCurrentSeason()
@@ -111,15 +112,15 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					continue
 				}
 
-				err = b.storage.UpdatePlacementGames(summonerUUID, currentSeason, placementStatus)
+				err = b.storage.InitializePlacementGames(summonerUUID, currentSeason, placementStatus)
 				if err != nil {
-					log.Printf("Error updating placement games for summoner %s: %v", summonerUUID, err)
+					log.Printf("Error initializing placement games for summoner %s: %v", summonerUUID, err)
 					continue
 				}
 
 				if placementStatus.IsInPlacements {
 					responses = append(responses, fmt.Sprintf("✅ '%s' added. Currently in placement games (%d/5 completed)",
-						summonerName, placementStatus.GamesPlayed))
+						summonerName, placementStatus.TotalGames))
 				}
 			} else {
 				responses = append(responses, fmt.Sprintf("✅ '%s' added. %s %s %d LP",

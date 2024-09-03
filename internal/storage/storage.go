@@ -90,12 +90,6 @@ func (s *Storage) AddSummoner(guildID, channelID, summonerName string, summoner 
 		if err != nil {
 			return fmt.Errorf("insert/update league entry: %w", err)
 		}
-	} else {
-		currentSeason := s.GetCurrentSeason()
-		err = s.InitializePlacementGames(summonerUUID, currentSeason)
-		if err != nil {
-			return fmt.Errorf("initialize placement games: %w", err)
-		}
 	}
 
 	_, err = tx.Exec(string(insertGuildSummonerAssociationSQL), guildID, summonerUUID)
@@ -193,45 +187,62 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 	return lpChange, nil
 }
 
-// InitializePlacementGames initializes or updates the placement games record for a summoner
-func (s *Storage) InitializePlacementGames(summonerUUID uuid.UUID, season Season) error {
+// InitializePlacementGames initializes the placement games record for a summoner
+func (s *Storage) InitializePlacementGames(summonerUUID uuid.UUID, season Season, status *riotapi.PlacementStatus) error {
 	seasonStr := SeasonToString(season)
 	_, err := s.db.Exec(`
 		INSERT INTO placement_games (summoner_id, season, total_games, wins, losses)
-		VALUES ($1, $2, 0, 0, 0)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (summoner_id, season) DO UPDATE
-		SET total_games = 0, wins = 0, losses = 0
-	`, summonerUUID, seasonStr)
+		SET total_games = $3, wins = $4, losses = $5
+	`, summonerUUID, seasonStr, status.TotalGames, status.Wins, status.Losses)
 	return err
 }
 
-// UpdatePlacementGames updates the placement games record for a summoner
-func (s *Storage) UpdatePlacementGames(summonerUUID uuid.UUID, season Season, status *riotapi.PlacementStatus) error {
+// IncrementPlacementGames increments the placement game stats for a summoner
+func (s *Storage) IncrementPlacementGames(summonerUUID uuid.UUID, isWin bool) error {
+	currentSeason := s.GetCurrentSeason()
+	seasonStr := SeasonToString(currentSeason)
+
 	_, err := s.db.Exec(`
-        INSERT INTO placement_games (summoner_id, season, total_games, wins, losses)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (summoner_id, season) DO UPDATE
-        SET total_games = $3, wins = $4, losses = $5
-    `, summonerUUID, SeasonToString(season), status.GamesPlayed, status.Wins, status.Losses)
-	return err
+		INSERT INTO placement_games (summoner_id, season, total_games, wins, losses)
+		VALUES ($1, $2, 1, CASE WHEN $3 THEN 1 ELSE 0 END, CASE WHEN $3 THEN 0 ELSE 1 END)
+		ON CONFLICT (summoner_id, season) DO UPDATE
+		SET total_games = placement_games.total_games + 1,
+			wins = placement_games.wins + CASE WHEN $3 THEN 1 ELSE 0 END,
+			losses = placement_games.losses + CASE WHEN $3 THEN 0 ELSE 1 END,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE placement_games.summoner_id = $1 AND placement_games.season = $2
+	`, summonerUUID, seasonStr, isWin)
+
+	if err != nil {
+		return fmt.Errorf("error incrementing placement games: %w", err)
+	}
+
+	return nil
 }
 
 // GetCurrentPlacementGames retrieves the current placement games status for a summoner
-func (s *Storage) GetCurrentPlacementGames(summonerUUID uuid.UUID) (*PlacementGames, error) {
+func (s *Storage) GetCurrentPlacementGames(summonerUUID uuid.UUID) (*riotapi.PlacementStatus, error) {
 	currentSeason := s.GetCurrentSeason()
-	var pg PlacementGames
+	var status riotapi.PlacementStatus
 	err := s.db.QueryRow(`
-        SELECT total_games, wins, losses
-        FROM placement_games
-        WHERE summoner_id = $1 AND season = $2
-    `, summonerUUID, SeasonToString(currentSeason)).Scan(&pg.TotalGames, &pg.Wins, &pg.Losses)
+		SELECT total_games, wins, losses
+		FROM placement_games
+		WHERE summoner_id = $1 AND season = $2
+	`, summonerUUID, SeasonToString(currentSeason)).Scan(&status.TotalGames, &status.Wins, &status.Losses)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		// If no row exists, return an initialized PlacementStatus
+		return &riotapi.PlacementStatus{
+			TotalGames: 0,
+			Wins:       0,
+			Losses:     0,
+		}, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error querying placement games: %w", err)
 	}
-	return &pg, nil
+	return &status, nil
 }
 
 // GetCurrentSeason returns the current season based on the current date
@@ -262,12 +273,8 @@ func SeasonToString(s Season) string {
 }
 
 // AddPlacementMatch adds a new match record to the database for a given summoner that is in placement games.
-// no lp calculated because riot doesnt give informations about lp in placement.
-func (s *Storage) AddPlacementMatch(riotSummonerID string, matchData *riotapi.MatchData) error {
-	summonerUUID, err := s.GetSummonerUUIDFromRiotID(riotSummonerID)
-	if err != nil {
-		return fmt.Errorf("error fetching summoner ID: %w", err)
-	}
+// It also updates the placement_games table to reflect the new match.
+func (s *Storage) AddPlacementMatch(summonerUUID uuid.UUID, matchData *riotapi.MatchData) error {
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -283,11 +290,6 @@ func (s *Storage) AddPlacementMatch(riotSummonerID string, matchData *riotapi.Ma
 	err = s.createNewRowInLPHistory(summonerUUID, matchData.MatchID, 0, 0, "UNRANKED", "")
 	if err != nil {
 		return fmt.Errorf("error creating new row in lp history: %w", err)
-	}
-
-	err = s.updateLeagueEntry(summonerUUID, 0, "UNRANKED", "")
-	if err != nil {
-		return fmt.Errorf("error updating league entry: %w", err)
 	}
 
 	err = tx.Commit()

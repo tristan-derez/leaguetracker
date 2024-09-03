@@ -140,7 +140,7 @@ func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
 
 	placementStatus := &PlacementStatus{
 		IsInPlacements: true,
-		GamesPlayed:    0,
+		TotalGames:     0,
 		Wins:           0,
 		Losses:         0,
 	}
@@ -155,14 +155,14 @@ func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
 			continue
 		}
 
-		placementStatus.GamesPlayed++
+		placementStatus.TotalGames++
 		if match.Win {
 			placementStatus.Wins++
 		} else {
 			placementStatus.Losses++
 		}
 
-		if placementStatus.GamesPlayed >= 5 {
+		if placementStatus.TotalGames >= 5 {
 			placementStatus.IsInPlacements = false
 			break
 		}
@@ -403,7 +403,7 @@ type challenge struct {
 
 type PlacementStatus struct {
 	IsInPlacements bool
-	GamesPlayed    int
+	TotalGames     int
 	Wins           int
 	Losses         int
 }
