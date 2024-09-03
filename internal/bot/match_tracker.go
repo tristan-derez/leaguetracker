@@ -112,10 +112,32 @@ func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch
 			return
 		}
 
-		embed := b.preparePlacementMatchEmbed(summoner.Summoner, newMatch, currentVersion, newPlacementStatus)
-		for _, guildID := range summoner.GuildIDs {
-			if err := b.announceNewMatch(guildID, embed); err != nil {
-				log.Printf("Error announcing new placement match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
+		if newPlacementStatus.TotalGames == 5 {
+			newRankInfo, err := b.riotClient.GetSummonerRank(summoner.Summoner.RiotSummonerID)
+			if err != nil {
+				log.Printf("Error fetching new rank for %s after placements: %v", summoner.Summoner.Name, err)
+				return
+			}
+
+			err = b.storage.UpdateLeagueEntry(summonerUUID, newRankInfo.LeaguePoints, newRankInfo.Tier, newRankInfo.Rank)
+			if err != nil {
+				log.Printf("Error updating summoner rank for %s after placements: %v", summoner.Summoner.Name, err)
+				return
+			}
+
+			embed := b.preparePlacementCompletionEmbed(summoner.Summoner, newMatch, currentVersion, newPlacementStatus, newRankInfo)
+
+			for _, guildID := range summoner.GuildIDs {
+				if err := b.announceNewMatch(guildID, embed); err != nil {
+					log.Printf("Error announcing placement completion for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
+				}
+			}
+		} else {
+			embed := b.preparePlacementMatchEmbed(summoner.Summoner, newMatch, currentVersion, newPlacementStatus)
+			for _, guildID := range summoner.GuildIDs {
+				if err := b.announceNewMatch(guildID, embed); err != nil {
+					log.Printf("Error announcing new placement match for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
+				}
 			}
 		}
 		return
@@ -183,18 +205,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 
 	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
 
-	// Determine embed color based on match result
-	var embedColor int
-	switch {
-	case match.GameDuration < 240:
-		embedColor = 0x808080 // Grey
-	case strings.ToLower(match.Result) == "win":
-		embedColor = 0x00FF00 // Green
-	case strings.ToLower(match.Result) == "loss":
-		embedColor = 0xFF0000 // Red
-	default:
-		embedColor = 0x808080 // Grey
-	}
+	embedColor := getEmbedColor(match.Result, match.GameDuration)
 
 	lpChangeStr := fmt.Sprintf("%+d", lpChange)
 	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
@@ -239,21 +250,11 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	return embed
 }
 
+// preparePlacementMatchEmbed returns an embed for placement games
 func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchData, currentVersion string, placementStatus *riotapi.PlacementStatus) *dg.MessageEmbed {
-	// Calculate KDA
 	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
 
-	var embedColor int
-	switch {
-	case match.GameDuration < 240:
-		embedColor = 0x808080 // Grey
-	case strings.ToLower(match.Result) == "win":
-		embedColor = 0x00FF00 // Green
-	case strings.ToLower(match.Result) == "loss":
-		embedColor = 0xFF0000 // Red
-	default:
-		embedColor = 0x808080 // Grey
-	}
+	embedColor := getEmbedColor(match.Result, match.GameDuration)
 
 	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
@@ -292,4 +293,61 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 	}
 
 	return embed
+}
+
+// preparePlacementCompletionEmbed returns an embed message for placement games completion
+func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *riotapi.MatchData, currentVersion string, placementStatus *riotapi.PlacementStatus, newRank *riotapi.LeagueEntry) *dg.MessageEmbed {
+	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
+	embedColor := getEmbedColor(match.Result, match.GameDuration)
+	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
+	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
+
+	embed := &dg.MessageEmbed{
+		Title:       fmt.Sprintf("%s Completed Placements!", summoner.Name),
+		Description: fmt.Sprintf("Final Placement Match: %s", match.Result),
+		Color:       embedColor,
+		Thumbnail: &dg.MessageEmbedThumbnail{
+			URL: championImageURL,
+		},
+		Fields: []*dg.MessageEmbedField{
+			{
+				Name:   "New Rank",
+				Value:  fmt.Sprintf("%s %s (%d LP)", newRank.Tier, newRank.Rank, newRank.LeaguePoints),
+				Inline: false,
+			},
+			{
+				Name:   "Placement Results",
+				Value:  fmt.Sprintf("%dW/%dL", placementStatus.Wins, placementStatus.Losses),
+				Inline: true,
+			},
+			{
+				Name:   "Final Match Stats",
+				Value:  fmt.Sprintf("[%d/%d/%d (%.2f:1 KDA)• %d (%d/min)](%s)", match.Kills, match.Deaths, match.Assists, kda, match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), leagueOfGraphLink),
+				Inline: true,
+			},
+		},
+		Footer: &dg.MessageEmbedFooter{
+			Text: fmt.Sprintf("Placements completed on %s", time.Now().Format("Jan 2, 2006 at 3:04 PM")),
+		},
+	}
+
+	return embed
+}
+
+// getEmbedColor returns an appropriate color code (in hexadecimal format) based on the match result and game duration.
+//   - If the game duration is less than 240 seconds, it returns grey (0x808080), indicating the match was likely a remake.
+//   - If the match result is "win" (case-insensitive), it returns green (0x00FF00), indicating a win.
+//   - If the match result is "loss" (case-insensitive), it returns red (0xFF0000), indicating a loss.
+//   - For any other cases (e.g., unknown match result), it returns grey (0x808080).
+func getEmbedColor(matchResult string, gameDuration int) int {
+	switch {
+	case gameDuration < 240:
+		return 0x808080
+	case strings.ToLower(matchResult) == "win":
+		return 0x00FF00
+	case strings.ToLower(matchResult) == "loss":
+		return 0xFF0000
+	default:
+		return 0x808080
+	}
 }

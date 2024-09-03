@@ -216,7 +216,7 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 		return 0, err
 	}
 
-	err = s.updateLeagueEntry(summonerUUID, newLP, newTier, newRank)
+	err = s.UpdateLeagueEntry(summonerUUID, newLP, newTier, newRank)
 	if err != nil {
 		return 0, err
 	}
@@ -397,7 +397,7 @@ func (s *Storage) createNewRowInLPHistory(summonerUUID uuid.UUID, matchID string
 }
 
 // updateLeagueEntry updates lp, tier and rank in league_entries for a summoner in the database.
-func (s *Storage) updateLeagueEntry(summonerUUID uuid.UUID, newLP int, newTier, newRank string) error {
+func (s *Storage) UpdateLeagueEntry(summonerUUID uuid.UUID, newLP int, newTier, newRank string) error {
 	_, err := s.db.Exec(string(updateLeagueEntriesSQL), newLP, newTier, newRank, summonerUUID)
 	if err != nil {
 		return fmt.Errorf("error updating league entry: %w", err)
