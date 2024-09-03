@@ -1,6 +1,7 @@
 package riotapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -35,9 +36,18 @@ func (c *Client) makeRequest(url string) (*http.Response, error) {
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
 
+		var errorResponse struct {
+			Status struct {
+				StatusCode int    `json:"status_code"`
+				Message    string `json:"message"`
+			} `json:"status"`
+		}
+
 		body, _ := io.ReadAll(resp.Body)
-		apiError := &RiotAPIError{
-			Message: string(body),
+
+		if err := json.Unmarshal(body, &errorResponse); err != nil {
+			// If we cannot parse the error response, use a default message
+			return nil, fmt.Errorf("API returned status code %d: %s", resp.StatusCode, string(body))
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
@@ -56,7 +66,7 @@ func (c *Client) makeRequest(url string) (*http.Response, error) {
 			return c.makeRequest(url) // Retry the request
 		}
 
-		return nil, fmt.Errorf("%s", apiError.Message)
+		return nil, fmt.Errorf("%s", errorResponse.Status.Message)
 	}
 
 	return resp, nil
