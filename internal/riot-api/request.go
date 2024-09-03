@@ -37,9 +37,7 @@ func (c *Client) makeRequest(url string) (*http.Response, error) {
 
 		body, _ := io.ReadAll(resp.Body)
 		apiError := &RiotAPIError{
-			StatusCode: resp.StatusCode,
-			Message:    string(body),
-			Headers:    resp.Header,
+			Message: string(body),
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
@@ -58,7 +56,7 @@ func (c *Client) makeRequest(url string) (*http.Response, error) {
 			return c.makeRequest(url) // Retry the request
 		}
 
-		return nil, apiError
+		return nil, fmt.Errorf("%s", apiError.Message)
 	}
 
 	return resp, nil
