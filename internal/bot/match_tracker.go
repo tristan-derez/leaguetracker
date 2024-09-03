@@ -16,7 +16,7 @@ import (
 // TrackMatches continuously monitors and tracks matches for all summoners across all guilds.
 // It runs indefinitely, periodically checking for new matches and announcing them to relevant guilds.
 func (b *Bot) TrackMatches() {
-	ticker := time.NewTicker(2 * time.Minute)
+	ticker := time.NewTicker(4 * time.Minute)
 	defer ticker.Stop()
 
 	for {
