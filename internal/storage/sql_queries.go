@@ -173,30 +173,37 @@ const (
 
 	// Get daily progress for summoners in a guild for the previous day
 	getDailySummonerProgressSQL SQLQuery = `
-    SELECT 
-        s.name,
-        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_tier,
-        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_rank,
-        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_lp,
-        (ARRAY_AGG(lh.tier ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_tier,
-        (ARRAY_AGG(lh.rank ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_rank,
-        (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_lp,
-        COUNT(*) FILTER (WHERE lh.lp_change > 0) AS wins,
-        COUNT(*) FILTER (WHERE lh.lp_change < 0) AS losses,
-        SUM(lh.lp_change) AS total_lp_change
-    FROM 
-        lp_history lh
-    JOIN 
-        summoners s ON lh.summoner_id = s.id
-    JOIN 
-        guild_summoner_associations gsa ON s.id = gsa.summoner_id
-    WHERE 
-        gsa.guild_id = $1
-        AND lh.timestamp::date = CURRENT_DATE - INTERVAL '1 day'
-    GROUP BY 
-        s.name
-    ORDER BY 
-        total_lp_change DESC
+    WITH ranked_summoners AS (
+        SELECT 
+            s.name,
+            (ARRAY_AGG(lh.tier ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_tier,
+            (ARRAY_AGG(lh.rank ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_rank,
+            (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_lp,
+            (ARRAY_AGG(lh.tier ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_tier,
+            (ARRAY_AGG(lh.rank ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_rank,
+            (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_lp,
+            COUNT(*) FILTER (WHERE lh.lp_change > 0) AS wins,
+            COUNT(*) FILTER (WHERE lh.lp_change < 0) AS losses,
+            SUM(lh.lp_change) AS total_lp_change,
+            ROW_NUMBER() OVER (ORDER BY SUM(lh.lp_change) DESC) AS rank
+        FROM 
+            lp_history lh
+        JOIN 
+            summoners s ON lh.summoner_id = s.id
+        JOIN 
+            guild_summoner_associations gsa ON s.id = gsa.summoner_id
+        WHERE 
+            gsa.guild_id = $1
+            AND lh.timestamp::date = CURRENT_DATE - INTERVAL '1 day'
+        GROUP BY 
+            s.name
+    )
+    SELECT * FROM (
+        (SELECT * FROM ranked_summoners WHERE rank <= 10)
+        UNION ALL
+        (SELECT * FROM ranked_summoners WHERE rank = (SELECT MAX(rank) FROM ranked_summoners))
+    ) AS combined_results
+    ORDER BY rank ASC;
     `
 
 	selectSummonerInGuildSQL SQLQuery = `

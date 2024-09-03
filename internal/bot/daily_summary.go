@@ -62,48 +62,66 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 		}}
 	}
 
-	happiestSummoner := progress[0]
-	saddestSummoner := progress[len(progress)-1]
-
-	happiestSummonerLPChange := happiestSummoner.CurrentLP - happiestSummoner.PreviousLP
-	saddestSummonerLPChange := saddestSummoner.CurrentLP - saddestSummoner.PreviousLP
-
-	// Create the first embed for best and worst performers
-	summaryEmbed := &discordgo.MessageEmbed{
-		Title: "Daily Summary",
-		Color: 0x3498db,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:  "**🏆 Happiest summoner**",
-				Value: fmt.Sprintf("%s (%+d LP)", happiestSummoner.Name, happiestSummonerLPChange),
-			},
-			{
-				Name:  "**😢 Saddest summoner**",
-				Value: fmt.Sprintf("%s (%+d LP)", saddestSummoner.Name, saddestSummonerLPChange),
-			},
-		},
+	var rankedSummoners, unrankedSummoners []storage.DailySummonerProgress
+	for _, p := range progress {
+		if p.IsUnranked {
+			unrankedSummoners = append(unrankedSummoners, p)
+		} else {
+			rankedSummoners = append(rankedSummoners, p)
+		}
 	}
 
-	// Create the second embed for individual summoner changes
+	if len(rankedSummoners) > 10 {
+		rankedSummoners = rankedSummoners[:10]
+	}
+
+	summaryEmbed := &discordgo.MessageEmbed{
+		Title:  "Daily Summary",
+		Color:  0x3498db,
+		Fields: []*discordgo.MessageEmbedField{},
+	}
+
+	if len(rankedSummoners) > 0 {
+		happiestsummoner := rankedSummoners[0]
+		summaryEmbed.Fields = append(summaryEmbed.Fields, &discordgo.MessageEmbedField{
+			Name:  "**🏆 Happiest summoner**",
+			Value: fmt.Sprintf("%s (%+d LP)", happiestsummoner.Name, happiestsummoner.LPChange),
+		})
+
+		if len(rankedSummoners) > 1 {
+			saddestSummoner := rankedSummoners[len(rankedSummoners)-1]
+			summaryEmbed.Fields = append(summaryEmbed.Fields, &discordgo.MessageEmbedField{
+				Name:  "**😢 Saddest summoner**",
+				Value: fmt.Sprintf("%s (%+d LP)", saddestSummoner.Name, saddestSummoner.LPChange),
+			})
+		}
+	}
+
 	changesEmbed := &discordgo.MessageEmbed{
-		Title:  "Daily Summary - All Summoners",
+		Title:  "Daily Summary - Top 10",
 		Color:  0x3498db,
 		Fields: []*discordgo.MessageEmbedField{},
 	}
 
 	// Add individual summoner progress
-	for _, p := range progress {
-		lpChange := p.CurrentLP - p.PreviousLP
-		nameField := fmt.Sprintf("**%s**  •  %+dLP (%dW/%dL)", p.Name, lpChange, p.Wins, p.Losses)
-
-		valueField := fmt.Sprintf("-# %s %s • %d LP ➡️ %s %s • %d LP",
-			utils.CapitalizeFirst(strings.ToLower(p.PreviousTier)), p.PreviousRank, p.PreviousLP,
-			utils.CapitalizeFirst(strings.ToLower(p.CurrentTier)), p.CurrentRank, p.CurrentLP)
-
+	for _, p := range rankedSummoners {
 		changesEmbed.Fields = append(changesEmbed.Fields, &discordgo.MessageEmbedField{
-			Name:  nameField,
-			Value: valueField,
+			Name: fmt.Sprintf("**%s**  •  %+dLP (%dW/%dL)", p.Name, p.LPChange, p.Wins, p.Losses),
+			Value: fmt.Sprintf("-# %s %s • %d LP ➡️ %s %s • %d LP",
+				utils.CapitalizeFirst(strings.ToLower(p.PreviousTier)), p.PreviousRank, p.PreviousLP,
+				utils.CapitalizeFirst(strings.ToLower(p.CurrentTier)), p.CurrentRank, p.CurrentLP),
 		})
+	}
+
+	if len(unrankedSummoners) > 0 {
+		unrankedField := &discordgo.MessageEmbedField{
+			Name:  "Unranked Summoners",
+			Value: "",
+		}
+		for _, p := range unrankedSummoners {
+			unrankedField.Value += fmt.Sprintf("%s (Placement Games: %d/10, %dW/%dL)\n", p.Name, p.TotalGames, p.Wins, p.Losses)
+		}
+		changesEmbed.Fields = append(changesEmbed.Fields, unrankedField)
 	}
 
 	return []*discordgo.MessageEmbed{summaryEmbed, changesEmbed}

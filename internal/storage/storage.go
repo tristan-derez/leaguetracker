@@ -679,6 +679,8 @@ type DailySummonerProgress struct {
 	Wins         int
 	Losses       int
 	LPChange     int
+	IsUnranked   bool
+	TotalGames   int
 }
 
 type SummonerWithGuilds struct {
