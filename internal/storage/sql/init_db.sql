@@ -1,8 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS guilds (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    guild_id TEXT UNIQUE NOT NULL,
+    guild_id TEXT PRIMARY KEY,
     guild_name TEXT,
     channel_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -84,7 +83,7 @@ CREATE TABLE IF NOT EXISTS lp_history (
 
 CREATE TABLE IF NOT EXISTS guild_summoner_associations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    guild_id UUID REFERENCES guilds(id),
+    guild_id TEXT REFERENCES guilds(guild_id),
     summoner_id UUID REFERENCES summoners(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
