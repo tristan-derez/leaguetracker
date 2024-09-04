@@ -287,28 +287,60 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	var content string
 	if len(summoners) == 0 {
-		content = "No summoners are currently being tracked in this server."
-	} else {
-		// Format the list of summoners with their ranks and LP
-		for _, summoner := range summoners {
-			if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
-				content += fmt.Sprintf("- %s (Unranked)\n", summoner.Name)
-			} else {
-				// Format the tier, rank and lp string
-				words := strings.Fields(summoner.Rank)
-				words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
-				formattedRank := strings.Join(words, " ")
-				content += fmt.Sprintf("- %s (%s, %dLP)\n", summoner.Name, formattedRank, summoner.LeaguePoints)
-			}
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "No summoners are currently being tracked in this server.",
+			},
+		})
+		return
+	}
+
+	currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
+	if err != nil {
+		log.Printf("Warning: %v", err)
+	}
+
+	embeds := []*discordgo.MessageEmbed{}
+
+	for _, summoner := range summoners {
+		var description string
+		var title string
+
+		profileIconImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/profileicon/%d.png", currentVersion, summoner.ProfileIconID)
+		leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/summoner/euw/%s", strings.TrimSpace(summoner.Name))
+
+		color := utils.GetRankColor(summoner.Rank)
+
+		if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
+			title = summoner.Name
+			description = "Unranked"
+		} else {
+			words := strings.Fields(summoner.Rank)
+			words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
+			formattedRank := strings.Join(words, " ")
+			title = fmt.Sprintf("%s (%s, %dLP)", summoner.Name, formattedRank, summoner.LeaguePoints)
+			description = fmt.Sprintf("%s, %d LP", formattedRank, summoner.LeaguePoints)
 		}
+
+		embed := &discordgo.MessageEmbed{
+			Title:       title,
+			URL:         leagueOfGraphLink,
+			Color:       color,
+			Description: description,
+			Thumbnail: &discordgo.MessageEmbedThumbnail{
+				URL: profileIconImageURL,
+			},
+		}
+
+		embeds = append(embeds, embed)
 	}
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: content,
+			Embeds: embeds,
 		},
 	})
 }
