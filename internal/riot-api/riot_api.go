@@ -133,7 +133,7 @@ func findParticipant(participants []participant, summonerPUUID string) (*partici
 }
 
 func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
-	matchIDs, err := c.GetRankedSoloMatchIDs(puuid, 10)
+	matchIDs, err := c.GetRankedSoloMatchIDs(puuid, 5)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching match IDs: %w", err)
 	}
@@ -255,7 +255,7 @@ func createMatchData(matchID string, info matchInfo, participant participant) *M
 
 // GetRankedSoloMatchIDs retrieves last game(s) id(s) from a summoner.
 func (c *Client) GetRankedSoloMatchIDs(puuid string, count int) ([]string, error) {
-	url := fmt.Sprintf("https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids?queue=420&count=%d", puuid, count)
+	url := fmt.Sprintf("https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids?queue=420&type=ranked&count=%d", puuid, count)
 
 	resp, err := c.makeRequest(url)
 	if err != nil {
