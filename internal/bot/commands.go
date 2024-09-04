@@ -278,16 +278,18 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			urlFormattedName := strings.ReplaceAll(summoner.Name, "#", "-")
 			leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/summoner/euw/%s", url.PathEscape(urlFormattedName))
 
-			color := utils.GetRankColor(summoner.Rank)
+			rankParts := strings.Fields(summoner.Rank)
+			tier := rankParts[0]
+			color := utils.GetRankColor(tier)
 
 			if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
-				title = summoner.Name
+				title = fmt.Sprintf("%s - Level %d", summoner.Name, summoner.SummonerLevel)
 				description = "Unranked"
 			} else {
 				words := strings.Fields(summoner.Rank)
 				words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
 				formattedRank := strings.Join(words, " ")
-				title = summoner.Name
+				title = fmt.Sprintf("%s - Level %d", summoner.Name, summoner.SummonerLevel)
 				description = fmt.Sprintf("%s, %d LP", formattedRank, summoner.LeaguePoints)
 			}
 
