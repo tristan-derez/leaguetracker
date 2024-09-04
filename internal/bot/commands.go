@@ -305,6 +305,7 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 
 			embeds = append(embeds, embed)
+			log.Printf("Summoner: %s, Tier: %s, Color: %d", summoner.Name, tier, color)
 		}
 
 		// Split embeds into chunks of 10
