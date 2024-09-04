@@ -257,7 +257,7 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 
 		if len(summoners) == 0 {
-			respondWithError(s, i, "No summoners in this server.")
+			sendFollowUpMessage(s, i, "No summoners are being tracked in this server.")
 			return
 		}
 
@@ -301,8 +301,17 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			embeds = append(embeds, embed)
 		}
 
-		if err := sendFollowUpMessage(s, i, "", embeds...); err != nil {
-			log.Printf("Error sending follow-up message with embeds: %v", err)
+		// Split embeds into chunks of 10
+		for idx := 0; idx < len(embeds); idx += 10 {
+			end := idx + 10
+			if end > len(embeds) {
+				end = len(embeds)
+			}
+			chunkEmbeds := embeds[idx:end]
+
+			if err := sendFollowUpMessage(s, i, "", chunkEmbeds...); err != nil {
+				log.Printf("Error sending follow-up message: %v", err)
+			}
 		}
 	}()
 }
