@@ -149,14 +149,14 @@ func (b *Bot) formatSummonerResponse(summonerName string, rankInfo *riotapi.Leag
 		placementStatus, err := b.riotClient.GetPlacementStatus(summonerPUUID)
 		if err != nil {
 			log.Printf("Error fetching placement status for '%s': %v", summonerName, err)
-			return "❌ Error fetching placement status."
+			return fmt.Sprintf("❌ Error fetching placement status for %s", summonerName)
 		}
 
 		currentSeason := b.storage.GetCurrentSeason()
 		err = b.storage.InitializePlacementGames(summonerUUID, currentSeason, placementStatus)
 		if err != nil {
-			log.Printf("Error initializing placement games for summoner %s: %v", summonerUUID, err)
-			return "❌ Error initializing placement games."
+			log.Printf("Error initializing placement games for summoner %s: %v", summonerName, err)
+			return fmt.Sprintf("❌ Error while initializing placement games for %s", summonerName)
 		}
 
 		if placementStatus.IsInPlacements {
