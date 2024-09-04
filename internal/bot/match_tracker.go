@@ -288,10 +288,10 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 	embedColor := getEmbedColor(match.Result, match.GameDuration)
 	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
-	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
+	TeamDmgOwnPercentage := fmt.Sprintf("**%.0f%%** of team's damage", match.TeamDamagePercentage*100)
 
 	embed := &dg.MessageEmbed{
-		Title:       fmt.Sprintf("%s Completed Placements!", summoner.Name),
+		Title:       fmt.Sprintf("%s • Placement complete!", summoner.Name),
 		URL:         leagueOfGraphLink,
 		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
 		Color:       embedColor,
@@ -308,7 +308,7 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 				Inline: false,
 			},
 			{
-				Value:  fmt.Sprintf("**%d**CS (%dCS/min) • **%s** and **%.0f%%**KP", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), TeamDmgOwnPercentage, match.KillParticipation*100),
+				Value:  fmt.Sprintf("**%d**CS (%dCS/min) • %s and **%.0f%%**KP", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), TeamDmgOwnPercentage, match.KillParticipation*100),
 				Inline: false,
 			},
 		},
