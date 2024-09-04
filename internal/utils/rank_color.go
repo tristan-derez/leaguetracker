@@ -21,6 +21,8 @@ func GetRankColor(summonerRanking string) int {
 		color = 0xFFD700 // Gold
 	case "PLATINUM":
 		color = 0x00FFCC // Teal
+	case "EMERALD":
+		color = 0x50C878 // Emerald Green
 	case "DIAMOND":
 		color = 0x00BFFF // Light Blue
 	case "MASTER":
@@ -32,6 +34,5 @@ func GetRankColor(summonerRanking string) int {
 	default:
 		color = 0xFFFFFF // White for any undefined rank
 	}
-
 	return color
 }
