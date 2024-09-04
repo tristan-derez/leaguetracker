@@ -262,20 +262,19 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 		},
 		Fields: []*dg.MessageEmbedField{
 			{
-				Value:  fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
+				Value:  fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
 				Inline: false,
 			},
 			{
-				Value:  fmt.Sprintf("%dk/%dd/%da (%.2f:1 KDA) • %d (%d/min)", match.Kills, match.Deaths, match.Assists, kda, match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60)),
+				Value:  fmt.Sprintf("**%d**CS (%dCS/min) • **%s** and **%.0f%%**KP", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), TeamDmgOwnPercentage, match.KillParticipation*100),
 				Inline: false,
 			},
 			{
-				Name:   "Dmg to champions",
-				Value:  fmt.Sprintf("%d", match.TotalDamageDealtToChampions),
+				Value:  fmt.Sprintf("**%d** damage inflicted to champions", match.TotalDamageDealtToChampions),
 				Inline: true,
 			},
 			{
-				Value:  fmt.Sprintf("%dW, %dL", placementStatus.Wins, placementStatus.Losses),
+				Value:  fmt.Sprintf("**%dW, %dL**", placementStatus.Wins, placementStatus.Losses),
 				Inline: false,
 			},
 		},
@@ -314,7 +313,7 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 			},
 			{
 				Name:   "Final Match Stats",
-				Value:  fmt.Sprintf("[%d/%d/%d (%.2f:1 KDA)• %d (%d/min)](%s)", match.Kills, match.Deaths, match.Assists, kda, match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), leagueOfGraphLink),
+				Value:  fmt.Sprintf("[**%d/%d/%d** (**%.2f:1** KDA)• %dCS (**%dCS**/min)](%s)", match.Kills, match.Deaths, match.Assists, kda, match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), leagueOfGraphLink),
 				Inline: true,
 			},
 		},
