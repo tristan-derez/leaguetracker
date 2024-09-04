@@ -288,6 +288,7 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 	embedColor := getEmbedColor(match.Result, match.GameDuration)
 	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
+	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
 	TeamDmgOwnPercentage := fmt.Sprintf("**%.0f%%** of team's damage", match.TeamDamagePercentage*100)
 
 	embed := &dg.MessageEmbed{
@@ -300,20 +301,20 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 		},
 		Fields: []*dg.MessageEmbedField{
 			{
-				Value:  fmt.Sprintf("From Unranked to %s %s (%d LP)", newRank.Tier, newRank.Rank, newRank.LeaguePoints),
-				Inline: false,
-			},
-			{
-				Value:  fmt.Sprintf("%dW/%dL", placementStatus.Wins, placementStatus.Losses),
-				Inline: false,
-			},
-			{
 				Value:  fmt.Sprintf("**%d**CS (%dCS/min) • %s and **%.0f%%**KP", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), TeamDmgOwnPercentage, match.KillParticipation*100),
+				Inline: false,
+			},
+			{
+				Value:  fmt.Sprintf("From **UNRANKED** to **%s %s** (**%d** LP)", newRank.Tier, newRank.Rank, newRank.LeaguePoints),
+				Inline: false,
+			},
+			{
+				Value:  fmt.Sprintf("**%dW/%dL**", placementStatus.Wins, placementStatus.Losses),
 				Inline: false,
 			},
 		},
 		Footer: &dg.MessageEmbedFooter{
-			Text: fmt.Sprintf("Placements completed on %s", time.Now().Format("Jan 2, 2006 at 3:04 PM")),
+			Text: fmt.Sprintf("Placements completed %s", endOfGameStr),
 		},
 	}
 
