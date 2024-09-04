@@ -288,8 +288,9 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 	embedColor := getEmbedColor(match.Result, match.GameDuration)
 	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
-	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
 	TeamDmgOwnPercentage := fmt.Sprintf("**%.0f%%** of team's damage", match.TeamDamagePercentage*100)
+
+	endOfGameStr := u.LowercaseTime(match.GameEndTimestamp)
 
 	embed := &dg.MessageEmbed{
 		Title:       fmt.Sprintf("%s • Placement complete!", summoner.Name),
