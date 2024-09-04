@@ -295,8 +295,8 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
 
 	embed := &dg.MessageEmbed{
-		Title:       fmt.Sprintf("[%s Completed Placements!](%s)", summoner.Name, leagueOfGraphLink),
-		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
+		Title:       fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
+		Description: fmt.Sprintf("[%s Completed Placements!](%s)", summoner.Name, leagueOfGraphLink),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
