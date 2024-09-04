@@ -292,29 +292,27 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 	embedColor := getEmbedColor(match.Result, match.GameDuration)
 	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
+	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
 
 	embed := &dg.MessageEmbed{
-		Title:       fmt.Sprintf("%s Completed Placements!", summoner.Name),
-		Description: fmt.Sprintf("Final Placement Match: %s", match.Result),
+		Title:       fmt.Sprintf("[%s Completed Placements!](%s)", summoner.Name, leagueOfGraphLink),
+		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
 		},
 		Fields: []*dg.MessageEmbedField{
 			{
-				Name:   "New Rank",
-				Value:  fmt.Sprintf("%s %s (%d LP)", newRank.Tier, newRank.Rank, newRank.LeaguePoints),
+				Value:  fmt.Sprintf("From Unranked to %s %s (%d LP)", newRank.Tier, newRank.Rank, newRank.LeaguePoints),
 				Inline: false,
 			},
 			{
-				Name:   "Placement Results",
 				Value:  fmt.Sprintf("%dW/%dL", placementStatus.Wins, placementStatus.Losses),
-				Inline: true,
+				Inline: false,
 			},
 			{
-				Name:   "Final Match Stats",
-				Value:  fmt.Sprintf("[**%d/%d/%d** (**%.2f:1** KDA)• %dCS (**%dCS**/min)](%s)", match.Kills, match.Deaths, match.Assists, kda, match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), leagueOfGraphLink),
-				Inline: true,
+				Value:  fmt.Sprintf("**%d**CS (%dCS/min) • **%s** and **%.0f%%**KP", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), TeamDmgOwnPercentage, match.KillParticipation*100),
+				Inline: false,
 			},
 		},
 		Footer: &dg.MessageEmbedFooter{
