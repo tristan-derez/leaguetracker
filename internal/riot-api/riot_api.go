@@ -353,8 +353,8 @@ func (c *Client) GetCurrentDDragonVersion() (string, error) {
 
 type Account struct {
 	SummonerPUUID   string `json:"puuid"`
-	SummonerName    string `json:"summonerName"`
-	SummonerTagLine string `json:"summonerTagLine"`
+	SummonerName    string `json:"gameName"`
+	SummonerTagLine string `json:"tagLine"`
 }
 
 type Summoner struct {
