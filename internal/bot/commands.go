@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -273,7 +274,9 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			var title string
 
 			profileIconImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/profileicon/%d.png", currentVersion, summoner.ProfileIconID)
-			leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/summoner/euw/%s", strings.TrimSpace(summoner.Name))
+
+			urlFormattedName := strings.ReplaceAll(summoner.Name, "#", "-")
+			leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/summoner/euw/%s", url.PathEscape(urlFormattedName))
 
 			color := utils.GetRankColor(summoner.Rank)
 
@@ -284,7 +287,7 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				words := strings.Fields(summoner.Rank)
 				words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
 				formattedRank := strings.Join(words, " ")
-				title = fmt.Sprintf("%s (%s, %dLP)", summoner.Name, formattedRank, summoner.LeaguePoints)
+				title = summoner.Name
 				description = fmt.Sprintf("%s, %d LP", formattedRank, summoner.LeaguePoints)
 			}
 
