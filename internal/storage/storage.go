@@ -120,7 +120,6 @@ func (s *Storage) GetSummonerUUIDAndAssociate(guildID, channelID, summonerName s
 	}
 	defer tx.Rollback()
 
-	// Check if the summoner exists and get their UUID
 	err = tx.QueryRow(`
         SELECT id FROM summoners
         WHERE LOWER(name) = LOWER($1)
@@ -128,7 +127,6 @@ func (s *Storage) GetSummonerUUIDAndAssociate(guildID, channelID, summonerName s
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// Summoner does not exist
 			return uuid.UUID{}, false, nil
 		}
 		return uuid.UUID{}, false, fmt.Errorf("query summoner UUID: %w", err)

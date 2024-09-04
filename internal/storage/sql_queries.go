@@ -57,8 +57,8 @@ const (
 
 	// delete an association of a summoner from a guild
 	deleteSummonerSQL SQLQuery = `
-        DELETE FROM guild_summoner_associations
-        WHERE guild_id = $1 AND summoner_id = (SELECT id FROM summoners WHERE name = $2)
+    DELETE FROM guild_summoner_associations
+    WHERE guild_id = $1 AND summoner_id = (SELECT id FROM summoners WHERE LOWER(name) = LOWER($2))
     `
 
 	// insert match data into matches table

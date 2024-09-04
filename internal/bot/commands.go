@@ -89,7 +89,7 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) string {
-	summonerName = strings.TrimSpace(strings.ToLower(summonerName))
+	summonerName = strings.TrimSpace(summonerName)
 	parts := strings.SplitN(summonerName, "#", 2)
 
 	if len(parts) != 2 {
@@ -121,6 +121,8 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 		return fmt.Sprintf("❌ Unable to find '%s': %v", summonerName, err)
 	}
 
+	fullNameOriginalCasing := fmt.Sprintf("%s#%s", account.SummonerName, account.SummonerTagLine)
+
 	summoner, err := b.riotClient.GetSummonerByPUUID(account.SummonerPUUID)
 	if err != nil {
 		log.Printf("Error fetching details for '%s': %v", summonerName, err)
@@ -131,7 +133,7 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 		log.Printf("Error fetching rank for '%s': %v", summonerName, err)
 	}
 
-	summonerUUID, err = b.storage.AddSummoner(guildID, channelID, summonerName, *summoner, rankInfo)
+	summonerUUID, err = b.storage.AddSummoner(guildID, channelID, fullNameOriginalCasing, *summoner, rankInfo)
 	if err != nil {
 		log.Printf("Error adding '%s' to database: %v", summonerName, err)
 		return fmt.Sprintf("❌ Error adding '%s' to database.", summonerName)
@@ -139,7 +141,7 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 
 	go b.addLastMatchData(summoner.RiotSummonerID, account.SummonerPUUID, *rankInfo)
 
-	return b.formatSummonerResponse(summonerName, rankInfo, summonerUUID, account.SummonerPUUID)
+	return b.formatSummonerResponse(fullNameOriginalCasing, rankInfo, summonerUUID, account.SummonerPUUID)
 }
 
 func (b *Bot) formatSummonerResponse(summonerName string, rankInfo *riotapi.LeagueEntry, summonerUUID uuid.UUID, summonerPUUID string) string {
@@ -205,13 +207,12 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
 		return
 	}
 
-	// Process summoners in a separate goroutine
 	go func() {
 		var responses []string
 		guildID := i.GuildID
 
 		for _, summonerName := range summonerNames {
-			summonerName = strings.TrimSpace(strings.ToLower(summonerName))
+			summonerName = strings.TrimSpace(summonerName)
 
 			err := b.storage.RemoveSummoner(guildID, summonerName)
 			if err != nil {
@@ -226,10 +227,8 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
 			}
 		}
 
-		// Join all responses into a single message
 		finalResponse := strings.Join(responses, "\n")
 
-		// Send the final response as a follow-up message
 		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: finalResponse,
 		})
@@ -256,7 +255,6 @@ func (b *Bot) handleReset(s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 	guildID := i.GuildID
 
-	// Remove all summoners
 	err = b.storage.RemoveAllSummoners(guildID)
 	if err != nil {
 		log.Printf("Error resetting summoners for guild %s: %v", guildID, err)
@@ -264,7 +262,6 @@ func (b *Bot) handleReset(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
-	// Send a success message
 	sendFollowUpMessage(s, i, "All summoners have been removed from tracking in this server.")
 }
 
