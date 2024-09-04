@@ -40,15 +40,9 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	summonerNames := strings.Split(options[0].StringValue(), ",")
 
-	// Respond immediately to avoid Discord interaction timeout
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "Adding summoner(s)...",
-		},
-	})
-	if err != nil {
+	if err := respondToInteractionWithSource(s, i, "Adding summoner(s)..."); err != nil {
 		log.Printf("Error responding to interaction: %v", err)
+		respondWithError(s, i, "Something went wrong. Please try again later.")
 		return
 	}
 
@@ -71,19 +65,14 @@ func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		// handle 2000 chars limit from discord
 		chunks := utils.ChunkMessage(result, 2000)
 		for _, chunk := range chunks {
-			_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: chunk,
-			})
-			if err != nil {
-				log.Printf("Error sending followup message: %v", err)
+			if err := sendFollowUpMessage(s, i, chunk); err != nil {
+				log.Printf("Error sending follow-up message: %v", err)
 			}
 		}
-	case <-time.After(20 * time.Second):
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "The operation is taking longer than expected. The summoners are being processed in the background. Please check the tracked summoners list later.",
-		})
-		if err != nil {
-			log.Printf("Error sending timeout followup message: %v", err)
+	case <-time.After(40 * time.Second):
+		message := "The operation is taking longer than expected. The summoners are being processed in the background. Please check the tracked summoners list later."
+		if err := sendFollowUpMessage(s, i, message); err != nil {
+			log.Printf("Error sending follow-up message: %v", err)
 		}
 	}
 }
@@ -195,15 +184,9 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 	summonerNames := strings.Split(options[0].StringValue(), ",")
 
-	// Respond immediately to avoid timeout
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "Removing summoner(s)...",
-		},
-	})
-	if err != nil {
+	if err := respondToInteractionWithSource(s, i, "Removing summoner(s)..."); err != nil {
 		log.Printf("Error responding to interaction: %v", err)
+		respondWithError(s, i, "Something went wrong. Please try again later.")
 		return
 	}
 
@@ -229,50 +212,31 @@ func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 		finalResponse := strings.Join(responses, "\n")
 
-		_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: finalResponse,
-		})
-		if err != nil {
+		if err := sendFollowUpMessage(s, i, finalResponse); err != nil {
 			log.Printf("Error sending follow-up message: %v", err)
 		}
 	}()
 }
 
 // handleReset processes the /reset command for the Discord bot.
-// It removes every summoners from the bot's tracking system.
+// It removes every summoners in guild from the bot's tracking system.
 func (b *Bot) handleReset(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Respond immediately to avoid timeout
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "Processing reset command...",
-		},
-	})
-	if err != nil {
+	guildID := i.GuildID
+
+	if err := respondToInteractionWithSource(s, i, "Removing every summoners from this guild..."); err != nil {
 		log.Printf("Error responding to interaction: %v", err)
+		respondWithError(s, i, "Something went wrong. Please try again later.")
 		return
 	}
 
-	guildID := i.GuildID
-
-	err = b.storage.RemoveAllSummoners(guildID)
+	err := b.storage.RemoveAllSummoners(guildID)
 	if err != nil {
 		log.Printf("Error resetting summoners for guild %s: %v", guildID, err)
-		sendFollowUpMessage(s, i, "An error occurred while resetting summoners. Please try again later.")
+		respondWithError(s, i, "Something went wrong. Please try again later.")
 		return
 	}
 
 	sendFollowUpMessage(s, i, "All summoners have been removed from tracking in this server.")
-}
-
-// sendFollowUpMessage sends a follow-up message to a Discord interaction
-func sendFollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
-	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Content: content,
-	})
-	if err != nil {
-		log.Printf("Error sending follow-up message: %v", err)
-	}
 }
 
 // handleList processes the /list command for the Discord bot.
@@ -280,69 +244,67 @@ func sendFollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, c
 func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	guildID := i.GuildID
 
-	summoners, err := b.storage.ListSummoners(guildID)
-	if err != nil {
-		log.Printf("Error listing summoners: %v", err)
-		respondWithError(s, i, "An error occurred while retrieving the list of summoners. Please try again later.")
+	if err := respondToInteractionWithSource(s, i, "Retrieving list of summoners in this guild..."); err != nil {
 		return
 	}
 
-	if len(summoners) == 0 {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "No summoners are currently being tracked in this server.",
-			},
-		})
-		return
-	}
-
-	currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
-	if err != nil {
-		log.Printf("Warning: %v", err)
-	}
-
-	embeds := []*discordgo.MessageEmbed{}
-
-	for _, summoner := range summoners {
-		var description string
-		var title string
-
-		profileIconImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/profileicon/%d.png", currentVersion, summoner.ProfileIconID)
-		leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/summoner/euw/%s", strings.TrimSpace(summoner.Name))
-
-		color := utils.GetRankColor(summoner.Rank)
-
-		if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
-			title = summoner.Name
-			description = "Unranked"
-		} else {
-			words := strings.Fields(summoner.Rank)
-			words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
-			formattedRank := strings.Join(words, " ")
-			title = fmt.Sprintf("%s (%s, %dLP)", summoner.Name, formattedRank, summoner.LeaguePoints)
-			description = fmt.Sprintf("%s, %d LP", formattedRank, summoner.LeaguePoints)
+	go func() {
+		summoners, err := b.storage.ListSummoners(guildID)
+		if err != nil {
+			log.Printf("Error listing summoners: %v", err)
+			sendFollowUpMessage(s, i, "An error occurred while retrieving the list of summoners. Please try again later.")
+			return
 		}
 
-		embed := &discordgo.MessageEmbed{
-			Title:       title,
-			URL:         leagueOfGraphLink,
-			Color:       color,
-			Description: description,
-			Thumbnail: &discordgo.MessageEmbedThumbnail{
-				URL: profileIconImageURL,
-			},
+		if len(summoners) == 0 {
+			respondWithError(s, i, "No summoners in this server.")
+			return
 		}
 
-		embeds = append(embeds, embed)
-	}
+		currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
+		if err != nil {
+			log.Printf("Warning: %v", err)
+		}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: embeds,
-		},
-	})
+		embeds := []*discordgo.MessageEmbed{}
+
+		for _, summoner := range summoners {
+			var description string
+			var title string
+
+			profileIconImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/profileicon/%d.png", currentVersion, summoner.ProfileIconID)
+			leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/summoner/euw/%s", strings.TrimSpace(summoner.Name))
+
+			color := utils.GetRankColor(summoner.Rank)
+
+			if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
+				title = summoner.Name
+				description = "Unranked"
+			} else {
+				words := strings.Fields(summoner.Rank)
+				words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
+				formattedRank := strings.Join(words, " ")
+				title = fmt.Sprintf("%s (%s, %dLP)", summoner.Name, formattedRank, summoner.LeaguePoints)
+				description = fmt.Sprintf("%s, %d LP", formattedRank, summoner.LeaguePoints)
+			}
+
+			embed := &discordgo.MessageEmbed{
+				Title:       title,
+				URL:         leagueOfGraphLink,
+				Color:       color,
+				Description: description,
+				Thumbnail: &discordgo.MessageEmbedThumbnail{
+					URL: profileIconImageURL,
+				},
+			}
+
+			embeds = append(embeds, embed)
+		}
+
+		if err := sendFollowUpMessage(s, i, "", embeds...); err != nil {
+			log.Printf("Error sending follow-up message with embeds: %v", err)
+		}
+	}()
 }
 
 // handleUnchannel processes the /unchannel command for the Discord bot.
@@ -352,16 +314,15 @@ func (b *Bot) handleUnchannel(s *discordgo.Session, i *discordgo.InteractionCrea
 	err := b.storage.RemoveChannelFromGuild(i.GuildID, i.ChannelID)
 	if err != nil {
 		log.Printf("Error removing channel association: %v", err)
-		respondWithError(s, i, "An error occurred while removing the channel association. Please try again later.")
+		respondWithError(s, i, "Something went wrong. Please try again later.")
 		return
 	}
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "This channel won't be used for update anymore. Type `/add {summonername#tagline}` to set a new channel.",
-		},
-	})
+	if err := respondToInteractionWithSource(s, i, "This channel won't be used for update anymore. Type `/add {summonername#tagline}` to set a new channel."); err != nil {
+		log.Printf("Error responding to interaction: %v", err)
+		respondWithError(s, i, "Something went wrong. Please try again later.")
+		return
+	}
 }
 
 // respondWithError generates an ephemeral error message that is only shown to the user that typed a command
@@ -373,4 +334,33 @@ func respondWithError(s *discordgo.Session, i *discordgo.InteractionCreate, mess
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
+}
+
+// sendFollowUpMessage sends a follow-up message to a Discord interaction
+func sendFollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, content string, embeds ...*discordgo.MessageEmbed) error {
+	params := &discordgo.WebhookParams{
+		Content: content,
+		Embeds:  embeds,
+	}
+
+	_, err := s.FollowupMessageCreate(i.Interaction, true, params)
+	if err != nil {
+		log.Printf("Error sending follow-up message: %v", err)
+		return err
+	}
+	return nil
+}
+
+func respondToInteractionWithSource(s *discordgo.Session, i *discordgo.InteractionCreate, content string) error {
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: content,
+		},
+	})
+	if err != nil {
+		log.Printf("Error acknowledging interaction: %v", err)
+		return err
+	}
+	return nil
 }
