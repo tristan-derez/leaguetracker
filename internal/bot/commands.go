@@ -280,17 +280,18 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 			rankParts := strings.Fields(summoner.Rank)
 			tier := rankParts[0]
-			color := utils.GetRankColor(tier)
+			colorHex := utils.GetRankColor(tier)
+			color := int(colorHex)
 
 			if summoner.Rank == "" || strings.ToUpper(summoner.Rank) == "UNRANKED" {
-				title = fmt.Sprintf("%s - Level %d", summoner.Name, summoner.SummonerLevel)
-				description = "Unranked"
+				title = fmt.Sprintf("%s - %s", summoner.Name, summoner.Rank)
+				description = fmt.Sprintf("Level %d", summoner.SummonerLevel)
 			} else {
 				words := strings.Fields(summoner.Rank)
 				words[0] = utils.CapitalizeFirst(strings.ToLower(words[0]))
 				formattedRank := strings.Join(words, " ")
-				title = fmt.Sprintf("%s - Level %d", summoner.Name, summoner.SummonerLevel)
-				description = fmt.Sprintf("%s, %d LP", formattedRank, summoner.LeaguePoints)
+				title = fmt.Sprintf("%s - %s (%dLP)", summoner.Name, formattedRank, summoner.LeaguePoints)
+				description = fmt.Sprintf("Level %d", summoner.SummonerLevel)
 			}
 
 			embed := &discordgo.MessageEmbed{
