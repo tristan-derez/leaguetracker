@@ -208,16 +208,14 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 
 	embed := &dg.MessageEmbed{
-		Description: fmt.Sprintf("**[%s (%s LP)](%s)**", summoner.Name, lpChangeStr, leagueOfGraphLink),
+		Title:       fmt.Sprintf("**%s (%s LP)**", summoner.Name, lpChangeStr),
+		URL:         leagueOfGraphLink,
+		Description: fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
 		},
 		Fields: []*dg.MessageEmbedField{
-			{
-				Value:  fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
-				Inline: false,
-			},
 			{
 				Name:   "Wins",
 				Value:  fmt.Sprintf("%d", rankInfo.Wins),
@@ -255,16 +253,14 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 	placementInfo := fmt.Sprintf("Placement game %d/5 completed", placementStatus.TotalGames)
 
 	embed := &dg.MessageEmbed{
-		Description: fmt.Sprintf("**[%s • %s](%s)**", summoner.Name, placementInfo, leagueOfGraphLink),
+		Title:       fmt.Sprintf("**%s • %s**", summoner.Name, placementInfo),
+		URL:         leagueOfGraphLink,
+		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
 		},
 		Fields: []*dg.MessageEmbedField{
-			{
-				Value:  fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
-				Inline: false,
-			},
 			{
 				Value:  fmt.Sprintf("**%d**CS (%dCS/min) • **%s** and **%.0f%%**KP", match.TotalMinionsKilled+match.NeutralMinionsKilled, (match.TotalMinionsKilled+match.NeutralMinionsKilled)/(match.GameDuration/60), TeamDmgOwnPercentage, match.KillParticipation*100),
 				Inline: false,
@@ -295,8 +291,9 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
 
 	embed := &dg.MessageEmbed{
-		Title:       fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
-		Description: fmt.Sprintf("[%s Completed Placements!](%s)", summoner.Name, leagueOfGraphLink),
+		Title:       fmt.Sprintf("%s Completed Placements!", summoner.Name),
+		URL:         leagueOfGraphLink,
+		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
