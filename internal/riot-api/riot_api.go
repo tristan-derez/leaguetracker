@@ -133,7 +133,7 @@ func findParticipant(participants []participant, summonerPUUID string) (*partici
 }
 
 func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
-	matchIDs, err := c.GetRankedSoloMatchIDs(puuid, 10) // Fetch more matches to ensure we have enough from the current split
+	matchIDs, err := c.GetRankedSoloMatchIDs(puuid, 10)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching match IDs: %w", err)
 	}
@@ -153,7 +153,7 @@ func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
 			return nil, fmt.Errorf("error fetching match data: %w", err)
 		}
 
-		if match.QueueID != 420 {
+		if match.QueueID != 420 || match.GameDuration <= 300 {
 			continue
 		}
 

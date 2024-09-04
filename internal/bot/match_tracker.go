@@ -95,10 +95,12 @@ func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch
 	wasInPlacements := (previousRank == nil || (previousRank.PrevTier == "UNRANKED" && previousRank.PrevRank == ""))
 
 	if wasInPlacements {
-		err = b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
-		if err != nil {
-			log.Printf("Error incrementing placement games for %s: %v", summoner.Summoner.Name, err)
-			return
+		if newMatch.GameDuration >= 300 {
+			err = b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
+			if err != nil {
+				log.Printf("Error incrementing placement games for %s: %v", summoner.Summoner.Name, err)
+				return
+			}
 		}
 
 		err = b.storage.AddPlacementMatch(summonerUUID, newMatch)
