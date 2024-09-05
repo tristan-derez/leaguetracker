@@ -93,9 +93,10 @@ func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch
 	}
 
 	wasInPlacements := (previousRank == nil || (previousRank.PrevTier == "UNRANKED" && previousRank.PrevRank == ""))
+	isRemake := newMatch.GameDuration < 210
 
 	if wasInPlacements {
-		if newMatch.GameDuration >= 300 {
+		if !isRemake {
 			err = b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
 			if err != nil {
 				log.Printf("Error incrementing placement games for %s: %v", summoner.Summoner.Name, err)
@@ -195,21 +196,26 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 		winRate = float64(rankInfo.Wins) / float64(totalGames) * 100
 	}
 
-	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
+	var lpChangeStr string
+	if match.GameDuration < 210 {
+		lpChangeStr = "Remake"
+	} else {
+		lpChangeStr = fmt.Sprintf("%+d", lpChange)
+	}
 
 	embedColor := getEmbedColor(match.Result, match.GameDuration)
 
-	lpChangeStr := fmt.Sprintf("%+d", lpChange)
 	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
 	oldRank := fmt.Sprintf("%s %s (%dlp)", previousRank.PrevTier, previousRank.PrevRank, previousRank.PrevLP)
 	currentRank := fmt.Sprintf("%s %s (%dlp)", rankInfo.Tier, rankInfo.Rank, rankInfo.LeaguePoints)
 	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, endOfGameStr)
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
-	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
+	leagueOfGraphURL := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
+	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
 
 	embed := &dg.MessageEmbed{
 		Title:       fmt.Sprintf("**%s (%s LP)**", summoner.Name, lpChangeStr),
-		URL:         leagueOfGraphLink,
+		URL:         leagueOfGraphURL,
 		Description: fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
@@ -248,11 +254,13 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 
 	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
-	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
+	leagueOfGraphURL := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
 
 	var placementInfo string
-	if match.GameDuration >= 240 {
+	if match.GameDuration < 210 {
+		placementInfo = "Remake"
+	} else {
 		placementInfo = fmt.Sprintf("Placement game %d/5 completed", placementStatus.TotalGames)
 	}
 
@@ -263,7 +271,7 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 
 	embed := &dg.MessageEmbed{
 		Title:       title,
-		URL:         leagueOfGraphLink,
+		URL:         leagueOfGraphURL,
 		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
@@ -295,7 +303,7 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *riotapi.MatchData, currentVersion string, placementStatus *riotapi.PlacementStatus, newRank *riotapi.LeagueEntry) *dg.MessageEmbed {
 	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
 	embedColor := getEmbedColor(match.Result, match.GameDuration)
-	leagueOfGraphLink := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
+	leagueOfGraphURL := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
 	kda := float64(match.Kills+match.Assists) / math.Max(float64(match.Deaths), 1)
 	TeamDmgOwnPercentage := fmt.Sprintf("**%.0f%%** of team's damage", match.TeamDamagePercentage*100)
 
@@ -303,7 +311,7 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 
 	embed := &dg.MessageEmbed{
 		Title:       fmt.Sprintf("%s • Placement complete!", summoner.Name),
-		URL:         leagueOfGraphLink,
+		URL:         leagueOfGraphURL,
 		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
@@ -332,13 +340,13 @@ func (b *Bot) preparePlacementCompletionEmbed(summoner riotapi.Summoner, match *
 }
 
 // getEmbedColor returns an appropriate color code (in hexadecimal format) based on the match result and game duration.
-//   - If the game duration is less than 240 seconds, it returns grey (0x808080), indicating the match was likely a remake.
+//   - If the game duration is less than 210 seconds, it returns grey (0x808080), indicating the match was a remake. (https://leagueoflegends.fandom.com/wiki/Surrendering)
 //   - If the match result is "win" (case-insensitive), it returns green (0x00FF00), indicating a win.
 //   - If the match result is "loss" (case-insensitive), it returns red (0xFF0000), indicating a loss.
 //   - For any other cases (e.g., unknown match result), it returns grey (0x808080).
 func getEmbedColor(matchResult string, gameDuration int) int {
 	switch {
-	case gameDuration < 240:
+	case gameDuration < 210:
 		return 0x808080
 	case strings.ToLower(matchResult) == "win":
 		return 0x00FF00

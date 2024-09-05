@@ -153,7 +153,7 @@ func (c *Client) GetPlacementStatus(puuid string) (*PlacementStatus, error) {
 			return nil, fmt.Errorf("error fetching match data: %w", err)
 		}
 
-		if match.QueueID != 420 || match.GameDuration <= 300 {
+		if match.QueueID != 420 || match.GameDuration <= 210 {
 			continue
 		}
 
