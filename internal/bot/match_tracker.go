@@ -200,7 +200,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	if match.GameDuration < 210 {
 		lpChangeStr = "Remake"
 	} else {
-		lpChangeStr = fmt.Sprintf("%+d", lpChange)
+		lpChangeStr = fmt.Sprintf("%+dLP", lpChange)
 	}
 
 	embedColor := getEmbedColor(match.Result, match.GameDuration)
@@ -214,7 +214,7 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
 
 	embed := &dg.MessageEmbed{
-		Title:       fmt.Sprintf("**%s (%s LP)**", summoner.Name, lpChangeStr),
+		Title:       fmt.Sprintf("**%s (%s)**", summoner.Name, lpChangeStr),
 		URL:         leagueOfGraphURL,
 		Description: fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
 		Color:       embedColor,
