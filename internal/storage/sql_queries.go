@@ -173,37 +173,71 @@ const (
 
 	// Get daily progress for summoners in a guild for the previous day
 	getDailySummonerProgressSQL SQLQuery = `
-    WITH ranked_summoners AS (
+    WITH previous_day_lp AS (
+        SELECT 
+            summoner_id,
+            new_lp AS day_before_lp,
+            tier AS day_before_tier,
+            rank AS day_before_rank
+        FROM (
+            SELECT 
+                summoner_id,
+                new_lp,
+                tier,
+                rank,
+                ROW_NUMBER() OVER (PARTITION BY summoner_id ORDER BY timestamp DESC, id DESC) AS rn
+            FROM lp_history
+            WHERE timestamp::date = CURRENT_DATE - INTERVAL '2 days'
+        ) subq
+        WHERE rn = 1
+    ),
+    ranked_summoners AS (
         SELECT 
             s.name,
-            (ARRAY_AGG(lh.tier ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_tier,
-            (ARRAY_AGG(lh.rank ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_rank,
-            (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp DESC, lh.id DESC))[1] AS current_lp,
-            (ARRAY_AGG(lh.tier ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_tier,
-            (ARRAY_AGG(lh.rank ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_rank,
-            (ARRAY_AGG(lh.new_lp ORDER BY lh.timestamp ASC, lh.id ASC))[1] AS previous_lp,
-            COUNT(*) FILTER (WHERE lh.lp_change > 0) AS wins,
-            COUNT(*) FILTER (WHERE lh.lp_change < 0) AS losses,
-            SUM(lh.lp_change) AS total_lp_change,
-            ROW_NUMBER() OVER (ORDER BY SUM(lh.lp_change) DESC) AS rank
+            LAST_VALUE(lh.tier) OVER w AS current_tier,
+            LAST_VALUE(lh.rank) OVER w AS current_rank,
+            LAST_VALUE(lh.new_lp) OVER w AS current_lp,
+            COALESCE(pdl.day_before_tier, FIRST_VALUE(lh.tier) OVER w) AS previous_tier,
+            COALESCE(pdl.day_before_rank, FIRST_VALUE(lh.rank) OVER w) AS previous_rank,
+            COALESCE(pdl.day_before_lp, FIRST_VALUE(lh.new_lp) OVER w) AS previous_lp,
+            COUNT(*) FILTER (WHERE lh.lp_change > 0) OVER (PARTITION BY s.id) AS wins,
+            COUNT(*) FILTER (WHERE lh.lp_change < 0) OVER (PARTITION BY s.id) AS losses,
+            SUM(lh.lp_change) OVER (PARTITION BY s.id) AS total_lp_change,
+            ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY lh.timestamp DESC, lh.id DESC) AS rn
         FROM 
             lp_history lh
         JOIN 
             summoners s ON lh.summoner_id = s.id
         JOIN 
             guild_summoner_associations gsa ON s.id = gsa.summoner_id
+        LEFT JOIN
+            previous_day_lp pdl ON s.id = pdl.summoner_id
         WHERE 
             gsa.guild_id = $1
             AND lh.timestamp::date = CURRENT_DATE - INTERVAL '1 day'
-        GROUP BY 
-            s.name
+        WINDOW w AS (PARTITION BY s.id ORDER BY lh.timestamp ASC, lh.id ASC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+    ),
+    final_ranked_summoners AS (
+        SELECT 
+            rs.name, 
+            rs.current_tier, 
+            rs.current_rank, 
+            rs.current_lp, 
+            rs.previous_tier,
+            rs.previous_rank,
+            rs.previous_lp, 
+            rs.wins, 
+            rs.losses, 
+            COALESCE(rs.current_lp - rs.previous_lp, rs.total_lp_change) AS calculated_lp_change,
+            ROW_NUMBER() OVER (ORDER BY COALESCE(rs.current_lp - rs.previous_lp, rs.total_lp_change) DESC) AS rank
+        FROM ranked_summoners rs
+        WHERE rs.rn = 1
     )
-    SELECT * FROM (
-        (SELECT * FROM ranked_summoners WHERE rank <= 10)
-        UNION ALL
-        (SELECT * FROM ranked_summoners WHERE rank = (SELECT MAX(rank) FROM ranked_summoners))
-    ) AS combined_results
-    ORDER BY rank ASC;
+    (SELECT * FROM final_ranked_summoners WHERE rank <= 10)
+    UNION ALL
+    (SELECT * FROM final_ranked_summoners ORDER BY calculated_lp_change ASC LIMIT 1)
+    ORDER BY rank;
     `
 
 	selectSummonerInGuildSQL SQLQuery = `
