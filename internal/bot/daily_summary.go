@@ -11,7 +11,9 @@ import (
 	"github.com/tristan-derez/league-tracker/internal/utils"
 )
 
-// PublishDailySummary generates and publishes a daily summary for each guild
+// PublishDailySummary generates and publishes a daily summary for each guild.
+// It fetches the progress data for all summoners in a guild and sends
+// formatted embed messages to the designated channel in each guild.
 func (b *Bot) PublishDailySummary() {
 	guilds, err := b.storage.GetAllGuilds()
 	if err != nil {
@@ -53,6 +55,10 @@ func (b *Bot) PublishDailySummary() {
 	}
 }
 
+// formatDailySummary creates formatted Discord embeds for the daily summary.
+// It takes a slice of DailySummonerProgress and returns two message embeds:
+// one for the overall summary and another for detailed changes.
+// If no progress data is available, it returns a single embed with a message.
 func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*discordgo.MessageEmbed {
 	if len(progress) == 0 {
 		return []*discordgo.MessageEmbed{{
@@ -62,39 +68,24 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 		}}
 	}
 
-	var rankedSummoners, unrankedSummoners []storage.DailySummonerProgress
-	for _, p := range progress {
-		if p.IsUnranked {
-			unrankedSummoners = append(unrankedSummoners, p)
-		} else {
-			rankedSummoners = append(rankedSummoners, p)
-		}
-	}
-
-	if len(rankedSummoners) > 10 {
-		rankedSummoners = rankedSummoners[:10]
-	}
-
 	summaryEmbed := &discordgo.MessageEmbed{
 		Title:  "Daily Summary",
 		Color:  0x3498db,
 		Fields: []*discordgo.MessageEmbedField{},
 	}
 
-	if len(rankedSummoners) > 0 {
-		happiestsummoner := rankedSummoners[0]
-		summaryEmbed.Fields = append(summaryEmbed.Fields, &discordgo.MessageEmbedField{
-			Name:  "**🏆 Happiest summoner**",
-			Value: fmt.Sprintf("%s (%+d LP)", happiestsummoner.Name, happiestsummoner.LPChange),
-		})
+	happiestsummoner := progress[0]
+	summaryEmbed.Fields = append(summaryEmbed.Fields, &discordgo.MessageEmbedField{
+		Name:  "**🏆 Happiest summoner**",
+		Value: fmt.Sprintf("%s (%+d LP)", happiestsummoner.Name, happiestsummoner.LPChange),
+	})
 
-		if len(rankedSummoners) > 1 {
-			saddestSummoner := rankedSummoners[len(rankedSummoners)-1]
-			summaryEmbed.Fields = append(summaryEmbed.Fields, &discordgo.MessageEmbedField{
-				Name:  "**😢 Saddest summoner**",
-				Value: fmt.Sprintf("%s (%+d LP)", saddestSummoner.Name, saddestSummoner.LPChange),
-			})
-		}
+	if len(progress) > 1 {
+		saddestSummoner := progress[len(progress)-1]
+		summaryEmbed.Fields = append(summaryEmbed.Fields, &discordgo.MessageEmbedField{
+			Name:  "**😢 Saddest summoner**",
+			Value: fmt.Sprintf("%s (%+d LP)", saddestSummoner.Name, saddestSummoner.LPChange),
+		})
 	}
 
 	changesEmbed := &discordgo.MessageEmbed{
@@ -103,30 +94,21 @@ func (b *Bot) formatDailySummary(progress []storage.DailySummonerProgress) []*di
 		Fields: []*discordgo.MessageEmbedField{},
 	}
 
-	// Add individual summoner progress
-	for _, p := range rankedSummoners {
+	for _, p := range progress {
 		changesEmbed.Fields = append(changesEmbed.Fields, &discordgo.MessageEmbedField{
-			Name: fmt.Sprintf("**%s**  •  %+dLP (%dW/%dL)", p.Name, p.LPChange, p.Wins, p.Losses),
-			Value: fmt.Sprintf("-# %s %s • %d LP ➡️ %s %s • %d LP",
+			Name: fmt.Sprintf("%s **%s**  •  %+d LP (%dW/%dL)", utils.GetSummaryRankDisplay(p.Rank), p.Name, p.LPChange, p.Wins, p.Losses),
+			Value: fmt.Sprintf("%s %s • %d LP ➡️ %s %s • %d LP",
 				utils.CapitalizeFirst(strings.ToLower(p.PreviousTier)), p.PreviousRank, p.PreviousLP,
 				utils.CapitalizeFirst(strings.ToLower(p.CurrentTier)), p.CurrentRank, p.CurrentLP),
 		})
 	}
 
-	if len(unrankedSummoners) > 0 {
-		unrankedField := &discordgo.MessageEmbedField{
-			Name:  "Unranked Summoners",
-			Value: "",
-		}
-		for _, p := range unrankedSummoners {
-			unrankedField.Value += fmt.Sprintf("%s (Placement Games: %d/10, %dW/%dL)\n", p.Name, p.TotalGames, p.Wins, p.Losses)
-		}
-		changesEmbed.Fields = append(changesEmbed.Fields, unrankedField)
-	}
-
 	return []*discordgo.MessageEmbed{summaryEmbed, changesEmbed}
 }
 
+// runDailySummaryJob starts a goroutine that runs the daily summary job.
+// It checks the time every minute and triggers the PublishDailySummary function
+// at 10:55 AM Paris time every day.
 func (b *Bot) runDailySummaryJob() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -145,7 +127,7 @@ func (b *Bot) runDailySummaryJob() {
 			}
 			parisTime := utcTime.In(parisLocation)
 
-			if parisTime.Hour() == 10 && (parisTime.Minute() == 00) {
+			if parisTime.Hour() == 10 && (parisTime.Minute() == 55) {
 				log.Println("Running daily summary")
 				b.PublishDailySummary()
 				log.Println("Daily summary completed")

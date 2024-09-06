@@ -579,7 +579,7 @@ func (s *Storage) GetDailySummonerProgress(guildID string) ([]DailySummonerProgr
 		err := rows.Scan(
 			&p.Name, &p.CurrentTier, &p.CurrentRank, &p.CurrentLP,
 			&p.PreviousTier, &p.PreviousRank, &p.PreviousLP,
-			&p.Wins, &p.Losses, &p.LPChange,
+			&p.Wins, &p.Losses, &p.LPChange, &p.Rank,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning daily summoner progress: %w", err)
@@ -677,8 +677,7 @@ type DailySummonerProgress struct {
 	Wins         int
 	Losses       int
 	LPChange     int
-	IsUnranked   bool
-	TotalGames   int
+	Rank         int
 }
 
 type SummonerWithGuilds struct {
