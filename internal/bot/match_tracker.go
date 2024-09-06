@@ -211,12 +211,14 @@ func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchD
 	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, endOfGameStr)
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
 	leagueOfGraphURL := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
-	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
+	displayChampionName := u.ChampionNameMapper(match.ChampionName, false)
+	imageChampionName := u.ChampionNameMapper(match.ChampionName, true)
+	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, imageChampionName)
 
 	embed := &dg.MessageEmbed{
 		Title:       fmt.Sprintf("**%s (%s)**", summoner.Name, lpChangeStr),
 		URL:         leagueOfGraphURL,
-		Description: fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, match.ChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
+		Description: fmt.Sprintf("**%d/%d/%d** with **%s** (%d:%02d) • %s and %.0f%%KP", match.Kills, match.Deaths, match.Assists, displayChampionName, match.GameDuration/60, match.GameDuration%60, TeamDmgOwnPercentage, match.KillParticipation*100),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
@@ -255,7 +257,9 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 	endOfGameStr := u.FormatTime(match.GameEndTimestamp)
 	TeamDmgOwnPercentage := fmt.Sprintf(" %.0f%% of team's damage", match.TeamDamagePercentage*100)
 	leagueOfGraphURL := fmt.Sprintf("https://www.leagueofgraphs.com/match/euw/%s", strings.TrimPrefix(match.MatchID, "EUW1_"))
-	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, match.ChampionName)
+	displayChampionName := u.ChampionNameMapper(match.ChampionName, false)
+	imageChampionName := u.ChampionNameMapper(match.ChampionName, true)
+	championImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/champion/%s.png", currentVersion, imageChampionName)
 
 	var placementInfo string
 	if match.GameDuration < 210 {
@@ -272,7 +276,7 @@ func (b *Bot) preparePlacementMatchEmbed(summoner riotapi.Summoner, match *riota
 	embed := &dg.MessageEmbed{
 		Title:       title,
 		URL:         leagueOfGraphURL,
-		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, match.ChampionName, match.GameDuration/60, match.GameDuration%60),
+		Description: fmt.Sprintf("**%d/%d/%d** (**%.2f:1** KDA) with **%s** (%d:%02d)", match.Kills, match.Deaths, match.Assists, kda, displayChampionName, match.GameDuration/60, match.GameDuration%60),
 		Color:       embedColor,
 		Thumbnail: &dg.MessageEmbedThumbnail{
 			URL: championImageURL,
