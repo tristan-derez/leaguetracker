@@ -19,8 +19,7 @@ summoners and receive notifications about their recent matches, including rank c
 
 - Go (Golang)
 - PostgreSQL
-- Discord API (via discordgo library)
-- Riot Games API for League of Legends data
+- DiscordGo
 
 ## 📋 Prerequisites
 
