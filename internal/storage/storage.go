@@ -474,19 +474,6 @@ func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 	return channelID, err
 }
 
-// GetGuildName retrieves the name of a guild with a guildID
-func (s *Storage) GetGuildName(guildID string) (string, error) {
-	var guildName string
-	err := s.db.QueryRow("SELECT guild_name FROM guilds WHERE guild_id = $1", guildID).Scan(&guildName)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", fmt.Errorf("no guild found with ID %s", guildID)
-		}
-		return "", fmt.Errorf("error fetching guild name: %w", err)
-	}
-	return guildName, nil
-}
-
 // GetLastMatchID retrieves the most recent match ID for a given summoner PUUID.
 func (s *Storage) GetLastMatchID(puuid string) (string, error) {
 	var matchID string
@@ -518,26 +505,6 @@ func (s *Storage) RemoveChannelFromGuild(guildID, channelID string) error {
 	return nil
 }
 
-// GetAllSummonersForGuild retrieves and returns summoners in a guild list in the database.
-func (s *Storage) GetAllSummonersForGuild(guildID string) ([]riotapi.Summoner, error) {
-	rows, err := s.db.Query(string(selectAllSummonersForAGuildSQL), guildID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var summoners []riotapi.Summoner
-	for rows.Next() {
-		var s riotapi.Summoner
-		if err := rows.Scan(&s.SummonerPUUID, &s.Name, &s.RiotSummonerID); err != nil {
-			return nil, err
-		}
-		summoners = append(summoners, s)
-	}
-
-	return summoners, rows.Err()
-}
-
 // GetSummonerUUIDFromRiotID retrieves the UUID of a summoner from riot_summoner_id.
 func (s *Storage) GetSummonerUUIDFromRiotID(riotSummonerID string) (uuid.UUID, error) {
 	var summonerUUID uuid.UUID
@@ -563,64 +530,6 @@ func (s *Storage) GetPreviousRank(summonerUUID uuid.UUID) (*PreviousRank, error)
 	}
 
 	return &prevRank, nil
-}
-
-// GetDailySummonerProgress fetches the daily summoner progress for a guild from the database.
-func (s *Storage) GetDailySummonerProgress(guildID string) ([]DailySummonerProgress, error) {
-	rows, err := s.db.Query(string(getDailySummonerProgressSQL), guildID)
-	if err != nil {
-		return nil, fmt.Errorf("error querying daily summoner progress: %w", err)
-	}
-	defer rows.Close()
-
-	var progress []DailySummonerProgress
-	for rows.Next() {
-		var p DailySummonerProgress
-		err := rows.Scan(
-			&p.Name, &p.CurrentTier, &p.CurrentRank, &p.CurrentLP,
-			&p.PreviousTier, &p.PreviousRank, &p.PreviousLP,
-			&p.Wins, &p.Losses, &p.LPChange, &p.Rank,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error scanning daily summoner progress: %w", err)
-		}
-		progress = append(progress, p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating daily summoner progress rows: %w", err)
-	}
-
-	return progress, nil
-}
-
-// GetAllGuilds retrieves all guilds from the database.
-func (s *Storage) GetAllGuilds() ([]Guild, error) {
-	query := `
-        SELECT guild_id, guild_name, channel_id
-        FROM guilds
-    `
-
-	rows, err := s.db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("error querying guilds: %w", err)
-	}
-	defer rows.Close()
-
-	var guilds []Guild
-	for rows.Next() {
-		var g Guild
-		if err := rows.Scan(&g.ID, &g.Name, &g.ChannelID); err != nil {
-			return nil, fmt.Errorf("error scanning guild row: %w", err)
-		}
-		guilds = append(guilds, g)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating guild rows: %w", err)
-	}
-
-	return guilds, nil
 }
 
 func (s *Storage) GetAllSummonersWithGuilds() ([]SummonerWithGuilds, error) {
@@ -664,20 +573,6 @@ type PreviousRank struct {
 type LPChange struct {
 	Timestamp time.Time
 	NewLP     int
-}
-
-type DailySummonerProgress struct {
-	Name         string
-	CurrentTier  string
-	CurrentRank  string
-	CurrentLP    int
-	PreviousTier string
-	PreviousRank string
-	PreviousLP   int
-	Wins         int
-	Losses       int
-	LPChange     int
-	Rank         int
 }
 
 type SummonerWithGuilds struct {

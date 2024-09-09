@@ -81,8 +81,6 @@ func (b *Bot) Run() error {
 		return err
 	}
 
-	go b.runDailySummaryJob()
-
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
