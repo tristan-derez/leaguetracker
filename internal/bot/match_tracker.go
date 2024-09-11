@@ -80,7 +80,7 @@ func (b *Bot) checkSummonerUpdates(summoner s.SummonerWithGuilds) error {
 	}
 
 	if matchFound {
-		b.processNewMatch(summoner, newMatch, previousRank, currentRankInfo)
+		b.processNewMatch(summoner, newMatch, previousRank, currentRankInfo, summonerUUID)
 	} else if hasRankChanged(previousRank, currentRankInfo) {
 		b.processRankChange(summoner, previousRank, currentRankInfo, summonerUUID)
 	}
@@ -165,13 +165,7 @@ func (b *Bot) prepareRankChangeEmbed(summoner riotapi.Summoner, prev *s.Previous
 }
 
 // processNewMatch processes a new match
-func (b *Bot) processNewMatch(summoner s.SummonerWithGuilds, newMatch *riotapi.MatchData, previousRank *s.PreviousRank, currentRankInfo *riotapi.LeagueEntry) {
-	summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.Summoner.RiotSummonerID)
-	if err != nil {
-		log.Printf("Error getting internal summonerUUID for %s: %v", summoner.Summoner.Name, err)
-		return
-	}
-
+func (b *Bot) processNewMatch(summoner s.SummonerWithGuilds, newMatch *riotapi.MatchData, previousRank *s.PreviousRank, currentRankInfo *riotapi.LeagueEntry, summonerUUID uuid.UUID) {
 	currentVersion, _ := b.riotClient.GetCurrentDDragonVersion()
 
 	wasInPlacements := (previousRank == nil || (previousRank.PrevTier == "UNRANKED" && previousRank.PrevRank == ""))
@@ -179,14 +173,14 @@ func (b *Bot) processNewMatch(summoner s.SummonerWithGuilds, newMatch *riotapi.M
 
 	if wasInPlacements {
 		if !isRemake {
-			err = b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
+			err := b.storage.IncrementPlacementGames(summonerUUID, newMatch.Win)
 			if err != nil {
 				log.Printf("Error incrementing placement games for %s: %v", summoner.Summoner.Name, err)
 				return
 			}
 		}
 
-		err = b.storage.AddPlacementMatch(summonerUUID, newMatch)
+		err := b.storage.AddPlacementMatch(summonerUUID, newMatch)
 		if err != nil {
 			log.Printf("Error adding placement match for %s: %v", summoner.Summoner.Name, err)
 			return
