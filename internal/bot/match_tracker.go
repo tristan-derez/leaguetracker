@@ -127,9 +127,10 @@ func (b *Bot) prepareRankChangeEmbed(summoner riotapi.Summoner, prev *s.Previous
 
 	profileIconImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/profileicon/%d.png", currentVersion, summoner.ProfileIconID)
 
+	unixTimestamp := time.Now().Unix()
 	oldRank := fmt.Sprintf("%s %s (%dlp)", prev.PrevTier, prev.PrevRank, prev.PrevLP)
 	currentRank := fmt.Sprintf("%s %s (%dlp)", current.Tier, current.Rank, current.LeaguePoints)
-	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, time.Now().Format("2006-01-02 15:04"))
+	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, u.FormatTime(unixTimestamp))
 
 	embed := &dg.MessageEmbed{
 		Title:       fmt.Sprintf("%s (%+d LP)", summoner.Name, lpChange),
