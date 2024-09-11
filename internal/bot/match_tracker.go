@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dg "github.com/bwmarrin/discordgo"
+	"github.com/google/uuid"
 	riotapi "github.com/tristan-derez/league-tracker/internal/riot-api"
 	s "github.com/tristan-derez/league-tracker/internal/storage"
 	u "github.com/tristan-derez/league-tracker/internal/utils"
@@ -39,21 +40,8 @@ func (b *Bot) TrackMatches() {
 			log.Printf("🕵️ Tracking matches for %d summoners", len(summoners))
 
 			for _, summoner := range summoners {
-
 				err := u.RetryWithBackoff(func() error {
-					matchFound, newMatch, err := b.checkForNewMatch(summoner.Summoner)
-					if err != nil {
-						if riotapi.IsRateLimitError(err) {
-							return err // Retryable error
-						}
-						return u.NewNonRetryableError(err)
-					}
-
-					if matchFound {
-						b.processAndAnnounceNewMatch(summoner, newMatch)
-					}
-
-					return nil // Success
+					return b.checkSummonerUpdates(summoner)
 				}, u.DefaultRetryConfig)
 				if err != nil {
 					if _, nonRetryable := err.(*u.NonRetryableError); nonRetryable {
@@ -67,30 +55,123 @@ func (b *Bot) TrackMatches() {
 	}
 }
 
-// processAndAnnounceNewMatch processes a new match and announces it to all relevant guilds.
-func (b *Bot) processAndAnnounceNewMatch(summoner s.SummonerWithGuilds, newMatch *riotapi.MatchData) {
+func (b *Bot) checkSummonerUpdates(summoner s.SummonerWithGuilds) error {
+	summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.Summoner.RiotSummonerID)
+	if err != nil {
+		return u.NewNonRetryableError(fmt.Errorf("error getting internal summonerUUID for %s: %w", summoner.Summoner.Name, err))
+	}
+
+	previousRank, err := b.storage.GetPreviousRank(summonerUUID)
+	if err != nil {
+		return u.NewNonRetryableError(fmt.Errorf("error getting previous rank: %w", err))
+	}
+
+	currentRankInfo, err := b.riotClient.GetSummonerRank(summoner.Summoner.RiotSummonerID)
+	if err != nil {
+		return fmt.Errorf("error fetching current rank for %s: %w", summoner.Summoner.Name, err)
+	}
+
+	matchFound, newMatch, err := b.checkForNewMatch(summoner.Summoner)
+	if err != nil {
+		if riotapi.IsRateLimitError(err) {
+			return err // Retryable error
+		}
+		return u.NewNonRetryableError(err)
+	}
+
+	if matchFound {
+		b.processNewMatch(summoner, newMatch, previousRank, currentRankInfo)
+	} else if hasRankChanged(previousRank, currentRankInfo) {
+		b.processRankChange(summoner, previousRank, currentRankInfo, summonerUUID)
+	}
+
+	return nil
+}
+
+func hasRankChanged(prev *s.PreviousRank, current *riotapi.LeagueEntry) bool {
+	if prev == nil {
+		return true
+	}
+	return prev.PrevTier != current.Tier ||
+		prev.PrevRank != current.Rank ||
+		prev.PrevLP != current.LeaguePoints
+}
+
+func (b *Bot) processRankChange(summoner s.SummonerWithGuilds, prev *s.PreviousRank, current *riotapi.LeagueEntry, summonerUUID uuid.UUID) {
+	lpChange := b.storage.CalculateLPChange(prev.PrevTier, current.Tier, prev.PrevRank, current.Rank, prev.PrevLP, current.LeaguePoints)
+
+	if err := b.storage.UpdateLeagueEntry(summonerUUID, current.LeaguePoints, current.Tier, current.Rank); err != nil {
+		log.Printf("Error updating league entry for %s: %v", summoner.Summoner.Name, err)
+	}
+
+	if err := b.storage.CreateNewRowInLPHistory(summonerUUID, "DODGE", lpChange, current.LeaguePoints, current.Tier, current.Rank); err != nil {
+		log.Printf("Error creating new row in lp history for %s: %v", summoner.Summoner.Name, err)
+	}
+
+	embed := b.prepareRankChangeEmbed(summoner.Summoner, prev, current, lpChange)
+
+	for _, guildID := range summoner.GuildIDs {
+		if err := b.announceNewMatch(guildID, embed); err != nil {
+			log.Printf("Error announcing rank change for %s in guild %s: %v", summoner.Summoner.Name, guildID, err)
+		}
+	}
+
+	log.Printf("%s probably dodged a game", summoner.Summoner.Name)
+}
+
+func (b *Bot) prepareRankChangeEmbed(summoner riotapi.Summoner, prev *s.PreviousRank, current *riotapi.LeagueEntry, lpChange int) *dg.MessageEmbed {
+	winRate := u.CalculateWinRate(current.Wins, current.Losses)
+	embedColor := 0xFF0000
+
+	currentVersion, _ := b.riotClient.GetCurrentDDragonVersion()
+
+	profileIconImageURL := fmt.Sprintf("https://ddragon.leagueoflegends.com/cdn/%s/img/profileicon/%d.png", currentVersion, summoner.ProfileIconID)
+
+	oldRank := fmt.Sprintf("%s %s (%dlp)", prev.PrevTier, prev.PrevRank, prev.PrevLP)
+	currentRank := fmt.Sprintf("%s %s (%dlp)", current.Tier, current.Rank, current.LeaguePoints)
+	fullFooterStr := fmt.Sprintf("%s -> %s • %s", oldRank, currentRank, time.Now().Format("2006-01-02 15:04"))
+
+	embed := &dg.MessageEmbed{
+		Title:       fmt.Sprintf("%s (%+d LP)", summoner.Name, lpChange),
+		Color:       embedColor,
+		Description: "Probably a dodge 😱",
+		Thumbnail: &dg.MessageEmbedThumbnail{
+			URL: profileIconImageURL,
+		},
+		Fields: []*dg.MessageEmbedField{
+			{
+				Name:   "Wins",
+				Value:  fmt.Sprintf("%d", current.Wins),
+				Inline: true,
+			},
+			{
+				Name:   "Losses",
+				Value:  fmt.Sprintf("%d", current.Losses),
+				Inline: true,
+			},
+			{
+				Name:   "Win Rate",
+				Value:  fmt.Sprintf("%.1f%%", winRate),
+				Inline: true,
+			},
+		},
+		Footer: &dg.MessageEmbedFooter{
+			Text: fullFooterStr,
+		},
+	}
+
+	return embed
+}
+
+// processNewMatch processes a new match
+func (b *Bot) processNewMatch(summoner s.SummonerWithGuilds, newMatch *riotapi.MatchData, previousRank *s.PreviousRank, currentRankInfo *riotapi.LeagueEntry) {
 	summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.Summoner.RiotSummonerID)
 	if err != nil {
 		log.Printf("Error getting internal summonerUUID for %s: %v", summoner.Summoner.Name, err)
 		return
 	}
 
-	previousRank, err := b.storage.GetPreviousRank(summonerUUID)
-	if err != nil {
-		log.Printf("Error getting previous rank: %v", err)
-		return
-	}
-
-	currentRankInfo, err := b.riotClient.GetSummonerRank(summoner.Summoner.RiotSummonerID)
-	if err != nil {
-		log.Printf("Error fetching current rank for %s: %v", summoner.Summoner.Name, err)
-		return
-	}
-
-	currentVersion, err := b.riotClient.GetCurrentDDragonVersion()
-	if err != nil {
-		log.Printf("Warning: %v", err)
-	}
+	currentVersion, _ := b.riotClient.GetCurrentDDragonVersion()
 
 	wasInPlacements := (previousRank == nil || (previousRank.PrevTier == "UNRANKED" && previousRank.PrevRank == ""))
 	isRemake := newMatch.GameDuration < 210
@@ -169,7 +250,7 @@ func (b *Bot) checkForNewMatch(summoner riotapi.Summoner) (bool, *riotapi.MatchD
 	return hasNewMatch, newMatch, nil
 }
 
-// announceNewMatch sends the embed to the channel that was set for updates
+// announceNewMatch sends the embed that was previously processed to the channel that was set for updates
 func (b *Bot) announceNewMatch(guildID string, embed *dg.MessageEmbed) error {
 	channelID, err := b.storage.GetGuildChannelID(guildID)
 	if err != nil {
@@ -189,12 +270,7 @@ func (b *Bot) announceNewMatch(guildID string, embed *dg.MessageEmbed) error {
 // It takes summoner information, match data, rank info, LP change, current game version,
 // and previous rank as input to generate a detailed embed about the match result.
 func (b *Bot) prepareMatchEmbed(summoner riotapi.Summoner, match *riotapi.MatchData, rankInfo *riotapi.LeagueEntry, lpChange int, currentVersion string, previousRank *s.PreviousRank) *dg.MessageEmbed {
-	// Calculate win rate
-	totalGames := rankInfo.Wins + rankInfo.Losses
-	var winRate float64
-	if totalGames > 0 {
-		winRate = float64(rankInfo.Wins) / float64(totalGames) * 100
-	}
+	winRate := u.CalculateWinRate(rankInfo.Wins, rankInfo.Losses)
 
 	var lpChangeStr string
 	if match.GameDuration < 210 {

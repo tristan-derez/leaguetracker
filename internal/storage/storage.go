@@ -209,7 +209,7 @@ func (s *Storage) AddMatchAndGetLPChange(riotSummonerID string, matchData *riota
 
 	lpChange := s.CalculateLPChange(previousRank.PrevTier, newTier, previousRank.PrevRank, newRank, previousRank.PrevLP, newLP)
 
-	err = s.createNewRowInLPHistory(summonerUUID, matchData.MatchID, lpChange, newLP, newTier, newRank)
+	err = s.CreateNewRowInLPHistory(summonerUUID, matchData.MatchID, lpChange, newLP, newTier, newRank)
 	if err != nil {
 		return 0, err
 	}
@@ -355,7 +355,7 @@ func (s *Storage) AddPlacementMatch(summonerUUID uuid.UUID, matchData *riotapi.M
 		return fmt.Errorf("error inserting match data: %w", err)
 	}
 
-	err = s.createNewRowInLPHistory(summonerUUID, matchData.MatchID, 0, 0, "UNRANKED", "")
+	err = s.CreateNewRowInLPHistory(summonerUUID, matchData.MatchID, 0, 0, "UNRANKED", "")
 	if err != nil {
 		return fmt.Errorf("error creating new row in lp history: %w", err)
 	}
@@ -383,10 +383,10 @@ func (s *Storage) insertMatchData(summonerUUID uuid.UUID, matchData *riotapi.Mat
 	return nil
 }
 
-// createNewRowInLPHistory inserts a new record into the lp_history table for a summoner.
+// CreateNewRowInLPHistory inserts a new record into the lp_history table for a summoner.
 // It captures the LP change, new LP total, tier, and rank for a specific match,
 // enabling detailed tracking of a summoner's rank progression over time.
-func (s *Storage) createNewRowInLPHistory(summonerUUID uuid.UUID, matchID string, lpChange, newLP int, tier, rank string) error {
+func (s *Storage) CreateNewRowInLPHistory(summonerUUID uuid.UUID, matchID string, lpChange, newLP int, tier, rank string) error {
 	_, err := s.db.Exec(string(insertLDataInLPHistorySQL), summonerUUID, matchID, lpChange, newLP, tier, rank)
 	if err != nil {
 		return fmt.Errorf("error inserting LP history: %w", err)
