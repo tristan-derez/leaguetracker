@@ -159,10 +159,6 @@ func (b *Bot) registerCommandsOnce() error {
 // handleGuildCreate is called when the bot joins a new Discord guild (server).
 // It adds the guild to the database and starts tracking matches for it.
 func (b *Bot) handleGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) {
-	// Lock the mutex to ensure thread-safe access to shared resources
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	err := b.storage.AddGuild(g.ID, g.Name)
 	if err != nil {
 		log.Printf("Error adding new guild to database: %v", err)
