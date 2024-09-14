@@ -61,6 +61,17 @@ func (b *Bot) checkSummonerUpdates(summoner s.SummonerWithGuilds) error {
 		return u.NewNonRetryableError(fmt.Errorf("error getting internal summonerUUID for %s: %w", summoner.Summoner.Name, err))
 	}
 
+	latestSummonerInfo, _ := b.riotClient.GetSummonerByPUUID(summoner.Summoner.SummonerPUUID)
+
+	err = b.storage.CheckAndUpdateSummonerInfo(summonerUUID, latestSummonerInfo.Name, latestSummonerInfo.ProfileIconID)
+	if err != nil {
+		log.Printf("Error updating summoner info for %s: %v", summoner.Summoner.Name, err)
+	}
+
+	if summoner.Summoner.Name != latestSummonerInfo.Name {
+		summoner.Summoner.Name = latestSummonerInfo.Name
+	}
+
 	previousRank, err := b.storage.GetPreviousRank(summonerUUID)
 	if err != nil {
 		return u.NewNonRetryableError(fmt.Errorf("error getting previous rank: %w", err))

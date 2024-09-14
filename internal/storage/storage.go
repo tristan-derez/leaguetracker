@@ -442,6 +442,20 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 	return lpChange
 }
 
+func (s *Storage) CheckAndUpdateSummonerInfo(summonerUUID uuid.UUID, newName string, newProfileIconID int) error {
+	_, err := s.db.Exec(`
+        UPDATE summoners
+        SET name = $2, profile_icon_id = $3, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND (name != $2 OR profile_icon_id != $3)
+    `, summonerUUID, newName, newProfileIconID)
+
+	if err != nil {
+		return fmt.Errorf("error updating summoner info: %w", err)
+	}
+
+	return nil
+}
+
 // ListSummoners retrieves and returns a list of summoners with their ranks for a given guild id.
 func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
 	rows, err := s.db.Query(string(selectSummonerWithRankSQL), guildID)
