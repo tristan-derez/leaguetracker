@@ -138,10 +138,6 @@ func (b *Bot) registerCommandsOnce() error {
 			Name:        "list",
 			Description: "List all followed summoners",
 		},
-		{
-			Name:        "ping",
-			Description: "Check if LeagueTracker is online",
-		},
 	}
 
 	for _, v := range commands {
