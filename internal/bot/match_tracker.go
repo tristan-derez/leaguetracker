@@ -63,13 +63,17 @@ func (b *Bot) checkSummonerUpdates(summoner s.SummonerWithGuilds) error {
 
 	latestSummonerInfo, _ := b.riotClient.GetSummonerByPUUID(summoner.Summoner.SummonerPUUID)
 
-	err = b.storage.CheckAndUpdateSummonerInfo(summonerUUID, latestSummonerInfo.Name, latestSummonerInfo.ProfileIconID)
+	latestAccountInfo, _ := b.riotClient.GetAccountByPUUID(summoner.Summoner.SummonerPUUID)
+
+	fullName := fmt.Sprintf("%s#%s", latestAccountInfo.SummonerName, latestAccountInfo.SummonerTagLine)
+
+	err = b.storage.CheckAndUpdateSummonerInfo(summonerUUID, fullName, latestSummonerInfo.ProfileIconID)
 	if err != nil {
 		log.Printf("Error updating summoner info for %s: %v", summoner.Summoner.Name, err)
 	}
 
-	if summoner.Summoner.Name != latestSummonerInfo.Name {
-		summoner.Summoner.Name = latestSummonerInfo.Name
+	if summoner.Summoner.Name != fullName {
+		summoner.Summoner.Name = fullName
 	}
 
 	previousRank, err := b.storage.GetPreviousRank(summonerUUID)

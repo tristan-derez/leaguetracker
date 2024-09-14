@@ -50,6 +50,23 @@ func (c *Client) GetAccountPUUIDBySummonerName(gameName, tagLine string) (*Accou
 	return &account, nil
 }
 
+func (c *Client) GetAccountByPUUID(puuid string) (*Account, error) {
+	url := fmt.Sprintf("https://europe.api.riotgames.com/riot/account/v1/accounts/by-puuid/%s", puuid)
+
+	resp, err := c.makeRequest(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var account Account
+	if err := json.NewDecoder(resp.Body).Decode(&account); err != nil {
+		return nil, fmt.Errorf("error decoding account response: %w", err)
+	}
+
+	return &account, nil
+}
+
 // GetSummonerByPUUID fetch summoner data by their puuid.
 func (c *Client) GetSummonerByPUUID(puuid string) (*Summoner, error) {
 	url := fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/%s", c.region, puuid)
