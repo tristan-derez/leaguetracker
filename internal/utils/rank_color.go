@@ -8,6 +8,7 @@ import (
 func GetRankColor(summonerRanking string) int {
 	var color int
 	rank := strings.ToUpper(summonerRanking)
+
 	switch rank {
 	case "UNRANKED":
 		color = 0xCCCCCC // Light Grey

@@ -169,7 +169,6 @@ func (b *Bot) handleGuildCreate(s *discordgo.Session, g *discordgo.GuildCreate) 
 func (b *Bot) Shutdown() error {
 	log.Println("Shutting down...")
 	b.cancel()
-
 	b.wg.Wait()
 
 	if err := b.session.Close(); err != nil {
@@ -180,7 +179,6 @@ func (b *Bot) Shutdown() error {
 		return fmt.Errorf("error closing storage: %w", err)
 	}
 
-	log.Println("Shutdown complete")
 	return nil
 }
 
@@ -195,5 +193,6 @@ func (b *Bot) Close() error {
 	if err := b.session.Close(); err != nil {
 		return fmt.Errorf("error closing Discord session: %w", err)
 	}
+
 	return nil
 }

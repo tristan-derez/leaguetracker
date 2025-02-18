@@ -57,6 +57,7 @@ func (b *Bot) TrackMatches() {
 
 func (b *Bot) checkSummonerUpdates(summoner s.SummonerWithGuilds) error {
 	summonerUUID, err := b.storage.GetSummonerUUIDFromRiotID(summoner.Summoner.RiotSummonerID)
+
 	if err != nil {
 		return u.NewNonRetryableError(fmt.Errorf("error getting internal summonerUUID for %s: %w", summoner.Summoner.Name, err))
 	}
@@ -107,6 +108,7 @@ func hasRankChanged(prev *s.PreviousRank, current *riotapi.LeagueEntry) bool {
 	if prev == nil {
 		return true
 	}
+
 	return prev.PrevTier != current.Tier ||
 		prev.PrevRank != current.Rank ||
 		prev.PrevLP != current.LeaguePoints

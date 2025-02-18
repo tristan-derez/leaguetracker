@@ -36,6 +36,5 @@ func IsRateLimitError(err error) bool {
 		}
 	}
 
-	// Fallback to checking error message for non-RiotAPIError types
 	return strings.Contains(strings.ToLower(err.Error()), "rate limit")
 }

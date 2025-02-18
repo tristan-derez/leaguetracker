@@ -50,12 +50,14 @@ func (s *Storage) initDB() error {
 	}
 
 	log.Println("Database initialized successfully")
+
 	return nil
 }
 
 // AddGuild adds or update a guild row to the database
 func (s *Storage) AddGuild(guildID, guildName string) error {
 	_, err := s.db.Exec(string(insertNewGuildSQL), guildID, guildName)
+
 	return err
 }
 
@@ -177,6 +179,7 @@ func (s *Storage) RemoveAllSummoners(guildID string) error {
 	if err != nil {
 		return fmt.Errorf("error removing all summoners from guild: %w", err)
 	}
+
 	return nil
 }
 
@@ -247,7 +250,6 @@ func (s *Storage) GetLeagueEntry(summonerUUID uuid.UUID) (*riotapi.LeagueEntry, 
 		&leagueEntry.FreshBlood,
 		&leagueEntry.Inactive,
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("fetching league entry: %w", err)
 	}
@@ -258,12 +260,14 @@ func (s *Storage) GetLeagueEntry(summonerUUID uuid.UUID) (*riotapi.LeagueEntry, 
 // InitializePlacementGames initializes the placement games record for a summoner
 func (s *Storage) InitializePlacementGames(summonerUUID uuid.UUID, season Season, status *riotapi.PlacementStatus) error {
 	seasonStr := SeasonToString(season)
+
 	_, err := s.db.Exec(`
 		INSERT INTO placement_games (summoner_id, season, total_games, wins, losses)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (summoner_id, season) DO UPDATE
 		SET total_games = $3, wins = $4, losses = $5
 	`, summonerUUID, seasonStr, status.TotalGames, status.Wins, status.Losses)
+
 	return err
 }
 
@@ -282,7 +286,6 @@ func (s *Storage) IncrementPlacementGames(summonerUUID uuid.UUID, isWin bool) er
 			updated_at = CURRENT_TIMESTAMP
 		WHERE placement_games.summoner_id = $1 AND placement_games.season = $2
 	`, summonerUUID, seasonStr, isWin)
-
 	if err != nil {
 		return fmt.Errorf("error incrementing placement games: %w", err)
 	}
@@ -293,6 +296,7 @@ func (s *Storage) IncrementPlacementGames(summonerUUID uuid.UUID, isWin bool) er
 // GetCurrentPlacementGames retrieves the current placement games status for a summoner
 func (s *Storage) GetCurrentPlacementGames(summonerUUID uuid.UUID) (*riotapi.PlacementStatus, error) {
 	currentSeason := s.GetCurrentSeason()
+
 	var status riotapi.PlacementStatus
 	err := s.db.QueryRow(`
 		SELECT total_games, wins, losses
@@ -310,6 +314,7 @@ func (s *Storage) GetCurrentPlacementGames(summonerUUID uuid.UUID) (*riotapi.Pla
 	if err != nil {
 		return nil, fmt.Errorf("error querying placement games: %w", err)
 	}
+
 	return &status, nil
 }
 
@@ -343,7 +348,6 @@ func SeasonToString(s Season) string {
 // AddPlacementMatch adds a new match record to the database for a given summoner that is in placement games.
 // It also updates the placement_games table to reflect the new match.
 func (s *Storage) AddPlacementMatch(summonerUUID uuid.UUID, matchData *riotapi.MatchData) error {
-
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -380,6 +384,7 @@ func (s *Storage) insertMatchData(summonerUUID uuid.UUID, matchData *riotapi.Mat
 	if err != nil {
 		return fmt.Errorf("error inserting match data: %w", err)
 	}
+
 	return nil
 }
 
@@ -391,6 +396,7 @@ func (s *Storage) CreateNewRowInLPHistory(summonerUUID uuid.UUID, matchID string
 	if err != nil {
 		return fmt.Errorf("error inserting LP history: %w", err)
 	}
+
 	return nil
 }
 
@@ -400,6 +406,7 @@ func (s *Storage) UpdateLeagueEntry(summonerUUID uuid.UUID, newLP int, newTier, 
 	if err != nil {
 		return fmt.Errorf("error updating league entry: %w", err)
 	}
+
 	return nil
 }
 
@@ -408,7 +415,6 @@ func (s *Storage) CalculateLPChange(oldTier, newTier, oldRank, newRank string, o
 	oldTier = strings.ToUpper(oldTier)
 	newTier = strings.ToUpper(newTier)
 
-	// Special handling for Master, Grandmaster, and Challenger tiers
 	highTiers := map[string]bool{"MASTER": true, "GRANDMASTER": true, "CHALLENGER": true}
 	if highTiers[oldTier] && highTiers[newTier] {
 		return newLP - oldLP
@@ -448,7 +454,6 @@ func (s *Storage) CheckAndUpdateSummonerInfo(summonerUUID uuid.UUID, fullName st
         SET name = $2, profile_icon_id = $3, updated_at = CURRENT_TIMESTAMP
         WHERE id = $1 AND (name != $2 OR profile_icon_id != $3)
     `, summonerUUID, fullName, newProfileIconID)
-
 	if err != nil {
 		return fmt.Errorf("error updating summoner info: %w", err)
 	}
@@ -462,6 +467,7 @@ func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	defer rows.Close()
 
 	var summoners []riotapi.Summoner
@@ -483,6 +489,7 @@ func (s *Storage) ListSummoners(guildID string) ([]riotapi.Summoner, error) {
 // GetGuildChannelID retrieves the channel ID associated with a given guild ID.
 func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 	var channelID string
+
 	err := s.db.QueryRow(string(selectChannelIdFromGuildIdSQL), guildID).Scan(&channelID)
 
 	return channelID, err
@@ -491,8 +498,8 @@ func (s *Storage) GetGuildChannelID(guildID string) (string, error) {
 // GetLastMatchID retrieves the most recent match ID for a given summoner PUUID.
 func (s *Storage) GetLastMatchID(puuid string) (string, error) {
 	var matchID string
-	err := s.db.QueryRow(string(selectLastMatchIDSQL), puuid).Scan(&matchID)
 
+	err := s.db.QueryRow(string(selectLastMatchIDSQL), puuid).Scan(&matchID)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
@@ -522,10 +529,12 @@ func (s *Storage) RemoveChannelFromGuild(guildID, channelID string) error {
 // GetSummonerUUIDFromRiotID retrieves the UUID of a summoner from riot_summoner_id.
 func (s *Storage) GetSummonerUUIDFromRiotID(riotSummonerID string) (uuid.UUID, error) {
 	var summonerUUID uuid.UUID
+
 	err := s.db.QueryRow("SELECT id FROM summoners WHERE riot_summoner_id = $1", riotSummonerID).Scan(&summonerUUID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("error fetching summoner UUID: %w", err)
 	}
+
 	return summonerUUID, nil
 }
 
@@ -533,13 +542,12 @@ func (s *Storage) GetSummonerUUIDFromRiotID(riotSummonerID string) (uuid.UUID, e
 // This should be called before updating entries.
 func (s *Storage) GetPreviousRank(summonerUUID uuid.UUID) (*PreviousRank, error) {
 	var prevRank PreviousRank
+
 	err := s.db.QueryRow(string(selectRankInLeagueEntriesSQL), summonerUUID).Scan(&prevRank.PrevTier, &prevRank.PrevRank, &prevRank.PrevLP)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// No previous rank found, return nil with no error
 			return nil, nil
 		}
-		// If there's any other error, return it
 		return nil, fmt.Errorf("error querying previous rank: %w", err)
 	}
 

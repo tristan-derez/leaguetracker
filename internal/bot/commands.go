@@ -34,6 +34,7 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 // It adds one or more summoners to the bot's tracking system.
 func (b *Bot) handleAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
+
 	if len(options) == 0 {
 		respondWithError(s, i, "Please provide at least one summoner name.")
 		return
@@ -161,6 +162,7 @@ func (b *Bot) formatSummonerResponse(summonerName string, rankInfo *riotapi.Leag
 
 func (b *Bot) addLastMatchData(summonerID, puuid string, rankInfo riotapi.LeagueEntry) {
 	lastMatchData, err := b.riotClient.GetLastRankedSoloMatchData(puuid)
+
 	if err != nil {
 		log.Printf("error retrieving ranked games for '%s': %v", summonerID, err)
 		return
@@ -178,6 +180,7 @@ func (b *Bot) addLastMatchData(summonerID, puuid string, rankInfo riotapi.League
 // It removes one or more summoners from the bot's tracking system.
 func (b *Bot) handleRemove(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
+
 	if len(options) == 0 {
 		respondWithError(s, i, "Please provide at least one summoner name.")
 		return
@@ -307,7 +310,6 @@ func (b *Bot) handleList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			embeds = append(embeds, embed)
 		}
 
-		// Split embeds into chunks of 10
 		for idx := 0; idx < len(embeds); idx += 10 {
 			end := idx + 10
 			if end > len(embeds) {
@@ -363,6 +365,7 @@ func sendFollowUpMessage(s *discordgo.Session, i *discordgo.InteractionCreate, c
 		log.Printf("Error sending follow-up message: %v", err)
 		return err
 	}
+
 	return nil
 }
 
@@ -377,5 +380,6 @@ func respondToInteractionWithSource(s *discordgo.Session, i *discordgo.Interacti
 		log.Printf("Error acknowledging interaction: %v", err)
 		return err
 	}
+
 	return nil
 }
