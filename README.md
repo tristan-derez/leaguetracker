@@ -17,7 +17,7 @@ summoners and receive notifications about their recent matches, including rank c
 
 ## 🛠️ Tech Stack
 
-- Go (Golang)
+- Golang
 - PostgreSQL
 - DiscordGo
 
