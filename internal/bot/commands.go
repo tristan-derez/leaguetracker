@@ -119,7 +119,7 @@ func (b *Bot) processSingleSummoner(summonerName, guildID, channelID string) str
 		log.Printf("Error fetching details for '%s': %v", summonerName, err)
 	}
 
-	rankInfo, err := b.riotClient.GetSummonerRank(summoner.RiotSummonerID)
+	rankInfo, err := b.riotClient.GetSummonerRank(account.SummonerPUUID)
 	if err != nil {
 		log.Printf("Error fetching rank for '%s': %v", summonerName, err)
 	}

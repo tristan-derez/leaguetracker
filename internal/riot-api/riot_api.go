@@ -86,8 +86,8 @@ func (c *Client) GetSummonerByPUUID(puuid string) (*Summoner, error) {
 }
 
 // GetSummonerRank fetch summoner current tier and rank from Riot API.
-func (c *Client) GetSummonerRank(RiotSummonerID string) (*LeagueEntry, error) {
-	url := fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v4/entries/by-summoner/%s", c.region, RiotSummonerID)
+func (c *Client) GetSummonerRank(summonerPUUID string) (*LeagueEntry, error) {
+	url := fmt.Sprintf("https://%s.api.riotgames.com/lol/league/v4/entries/by-puuid/%s", c.region, summonerPUUID)
 
 	resp, err := c.makeRequest(url)
 	if err != nil {
